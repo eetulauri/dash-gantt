@@ -341,160 +341,317 @@ export default class DashGantt extends Component {
     render() {
         const { id, professionals, date } = this.props;
         
+        const styles = {
+            dashGantt: {
+                fontFamily: 'Arial, sans-serif',
+                margin: '20px 0'
+            },
+            dashGanttHeader: {
+                marginBottom: '10px'
+            },
+            dashGanttContainer: {
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                overflow: 'hidden'
+            },
+            dashGanttTimeHeader: {
+                display: 'flex',
+                borderBottom: '1px solid #ccc',
+                backgroundColor: '#f5f5f5'
+            },
+            dashGanttEmptyCell: {
+                width: '150px',
+                borderRight: '1px solid #ccc'
+            },
+            dashGanttHours: {
+                display: 'flex',
+                flex: 1
+            },
+            dashGanttHour: {
+                flex: 1,
+                padding: '8px',
+                textAlign: 'center',
+                fontWeight: 'bold',
+                borderRight: '1px solid #ccc'
+            },
+            dashGanttRow: {
+                display: 'flex',
+                borderBottom: '1px solid #ccc',
+                height: '60px'
+            },
+            dashGanttProfessional: {
+                width: '150px',
+                padding: '8px',
+                borderRight: '1px solid #ccc',
+                backgroundColor: '#f9f9f9',
+                display: 'flex',
+                alignItems: 'center'
+            },
+            dashGanttTimeline: {
+                flex: 1,
+                position: 'relative',
+                display: 'flex'
+            },
+            dashGanttGridLine: {
+                flex: 1,
+                height: '100%',
+                borderRight: '1px solid #eee',
+                cursor: 'pointer'
+            },
+            dashGanttSlot: {
+                position: 'absolute',
+                top: '5px',
+                height: 'calc(100% - 10px)',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                borderRadius: '4px',
+                padding: '5px',
+                fontSize: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                zIndex: 10
+            },
+            dashGanttSlotHover: {
+                boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+            },
+            dashGanttSlotTime: {
+                fontWeight: 'bold',
+                marginBottom: '2px'
+            },
+            dashGanttProbability: {
+                fontSize: '10px',
+                fontWeight: 'bold'
+            },
+            dashGanttEditor: {
+                marginTop: '20px',
+                padding: '15px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                backgroundColor: '#f9f9f9'
+            },
+            dashGanttForm: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+            },
+            dashGanttFormGroup: {
+                display: 'flex',
+                alignItems: 'center'
+            },
+            dashGanttFormGroupLabel: {
+                width: '100px',
+                marginRight: '10px'
+            },
+            dashGanttFormGroupInput: {
+                flex: 1,
+                padding: '8px',
+                border: '1px solid #ccc',
+                borderRadius: '4px'
+            },
+            dashGanttFormActions: {
+                display: 'flex',
+                gap: '10px',
+                marginTop: '10px'
+            },
+            dashGanttFormActionsButton: {
+                padding: '8px 15px',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+            },
+            dashGanttFormActionsSave: {
+                backgroundColor: '#4CAF50',
+                color: 'white'
+            },
+            dashGanttFormActionsCancel: {
+                backgroundColor: '#f5f5f5'
+            },
+            dashGanttFormActionsRemove: {
+                backgroundColor: '#f44336',
+                color: 'white'
+            }
+        };
+        
         return (
-            <div id={id} className="dash-gantt">
-                <div className="dash-gantt-header">
+            <div id={id} style={styles.dashGantt}>
+                <div style={styles.dashGanttHeader}>
                     <h2>Schedule for {date}</h2>
                 </div>
-                <div className="dash-gantt-container">
-                    {this.renderTimeHeader()}
-                    <div className="dash-gantt-body">
-                        {professionals.map(professional => this.renderProfessionalRow(professional))}
+                <div style={styles.dashGanttContainer}>
+                    <div style={styles.dashGanttTimeHeader}>
+                        <div style={styles.dashGanttEmptyCell}></div>
+                        <div style={styles.dashGanttHours}>
+                            {/* Create hour markers for the time header */}
+                            {Array.from({ length: this.props.endHour - this.props.startHour + 1 }, (_, i) => {
+                                const hour = this.props.startHour + i;
+                                const displayHour = hour % 24; // Handle 24-hour format
+                                const isPM = displayHour >= 12;
+                                const display12Hour = displayHour === 0 ? 12 : (displayHour > 12 ? displayHour - 12 : displayHour);
+                                const timeLabel = `${display12Hour}${isPM ? 'PM' : 'AM'}`;
+                                
+                                return (
+                                    <div key={`hour-${hour}`} style={styles.dashGanttHour}>
+                                        {timeLabel}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        {professionals.map(professional => {
+                            const professionalSlots = this.props.timeslots.filter(slot => slot.professionalId === professional.id);
+                            
+                            return (
+                                <div key={`row-${professional.id}`} style={styles.dashGanttRow}>
+                                    <div style={styles.dashGanttProfessional}>
+                                        {professional.name}
+                                    </div>
+                                    <div style={styles.dashGanttTimeline}>
+                                        {/* Render grid lines for each hour */}
+                                        {Array.from({ length: this.props.endHour - this.props.startHour + 1 }, (_, i) => {
+                                            const hour = this.props.startHour + i;
+                                            const isHovered = this.state.hoveredCell && 
+                                                            this.state.hoveredCell.professionalId === professional.id && 
+                                                            this.state.hoveredCell.hour === hour;
+                                            
+                                            return (
+                                                <div 
+                                                    key={`grid-${i}`} 
+                                                    style={{
+                                                        ...styles.dashGanttGridLine,
+                                                        backgroundColor: isHovered ? '#f0f0f0' : 'transparent'
+                                                    }}
+                                                    onClick={() => this.handleAddSlot(professional.id, hour)}
+                                                    onMouseEnter={() => this.handleCellHover(professional.id, hour)}
+                                                    onMouseLeave={this.handleCellLeave}
+                                                />
+                                            );
+                                        })}
+                                        
+                                        {/* Render timeslots */}
+                                        {professionalSlots.map(slot => {
+                                            const slotStyle = this.calculateSlotStyle(slot, this.props.startHour, this.props.endHour);
+                                            const backgroundColor = this.getProbabilityColor(slot.bookingProbability);
+                                            
+                                            return (
+                                                <div 
+                                                    key={`slot-${slot.id}`} 
+                                                    style={{
+                                                        ...styles.dashGanttSlot,
+                                                        left: slotStyle.left,
+                                                        width: slotStyle.width,
+                                                        backgroundColor
+                                                    }}
+                                                    onClick={() => this.handleSlotClick(slot)}
+                                                >
+                                                    <div style={styles.dashGanttSlotTime}>
+                                                        {slot.start} - {slot.end}
+                                                    </div>
+                                                    {slot.bookingProbability !== undefined && (
+                                                        <div style={styles.dashGanttProbability}>
+                                                            {Math.round(slot.bookingProbability * 100)}%
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
-                {this.renderSlotEditor()}
-                <style jsx>{`
-                    .dash-gantt {
-                        font-family: Arial, sans-serif;
-                        margin: 20px 0;
-                    }
-                    .dash-gantt-header {
-                        margin-bottom: 10px;
-                    }
-                    .dash-gantt-container {
-                        border: 1px solid #ccc;
-                        border-radius: 4px;
-                        overflow: hidden;
-                    }
-                    .dash-gantt-time-header {
-                        display: flex;
-                        border-bottom: 1px solid #ccc;
-                        background-color: #f5f5f5;
-                    }
-                    .dash-gantt-empty-cell {
-                        width: 150px;
-                        border-right: 1px solid #ccc;
-                    }
-                    .dash-gantt-hours {
-                        display: flex;
-                        flex: 1;
-                    }
-                    .dash-gantt-hour {
-                        flex: 1;
-                        padding: 8px;
-                        text-align: center;
-                        font-weight: bold;
-                        border-right: 1px solid #ccc;
-                    }
-                    .dash-gantt-row {
-                        display: flex;
-                        border-bottom: 1px solid #ccc;
-                        height: 60px;
-                    }
-                    .dash-gantt-professional {
-                        width: 150px;
-                        padding: 8px;
-                        border-right: 1px solid #ccc;
-                        background-color: #f9f9f9;
-                        display: flex;
-                        align-items: center;
-                    }
-                    .dash-gantt-timeline {
-                        flex: 1;
-                        position: relative;
-                        display: flex;
-                    }
-                    .dash-gantt-grid-line {
-                        flex: 1;
-                        height: 100%;
-                        border-right: 1px solid #eee;
-                        cursor: pointer;
-                    }
-                    .dash-gantt-grid-line:hover {
-                        background-color: #f0f0f0;
-                    }
-                    .dash-gantt-slot {
-                        position: absolute;
-                        top: 5px;
-                        height: calc(100% - 10px);
-                        background-color: #4CAF50;
-                        color: white;
-                        border-radius: 4px;
-                        padding: 5px;
-                        font-size: 12px;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        align-items: center;
-                        cursor: pointer;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
-                        z-index: 10;
-                    }
-                    .dash-gantt-slot:hover {
-                        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-                    }
-                    .dash-gantt-slot-time {
-                        font-weight: bold;
-                        margin-bottom: 2px;
-                    }
-                    .dash-gantt-probability {
-                        font-size: 10px;
-                        font-weight: bold;
-                    }
-                    .dash-gantt-editor {
-                        margin-top: 20px;
-                        padding: 15px;
-                        border: 1px solid #ccc;
-                        border-radius: 4px;
-                        background-color: #f9f9f9;
-                    }
-                    .dash-gantt-form {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 10px;
-                    }
-                    .dash-gantt-form-group {
-                        display: flex;
-                        align-items: center;
-                    }
-                    .dash-gantt-form-group label {
-                        width: 100px;
-                        margin-right: 10px;
-                    }
-                    .dash-gantt-form-group input,
-                    .dash-gantt-form-group select {
-                        flex: 1;
-                        padding: 8px;
-                        border: 1px solid #ccc;
-                        border-radius: 4px;
-                    }
-                    .dash-gantt-form-actions {
-                        display: flex;
-                        gap: 10px;
-                        margin-top: 10px;
-                    }
-                    .dash-gantt-form-actions button {
-                        padding: 8px 15px;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-weight: bold;
-                    }
-                    .dash-gantt-form-actions button:first-child {
-                        background-color: #4CAF50;
-                        color: white;
-                    }
-                    .dash-gantt-form-actions button:nth-child(2) {
-                        background-color: #f5f5f5;
-                    }
-                    .dash-gantt-form-actions button:last-child {
-                        background-color: #f44336;
-                        color: white;
-                    }
-                `}</style>
+                
+                {/* Render slot editor */}
+                {this.state.selectedSlot || this.state.isAddingSlot ? (
+                    <div style={styles.dashGanttEditor}>
+                        <h3>{this.state.isAddingSlot ? 'Add New Slot' : 'Edit Slot'}</h3>
+                        <div style={styles.dashGanttForm}>
+                            <div style={styles.dashGanttFormGroup}>
+                                <label style={styles.dashGanttFormGroupLabel}>Professional:</label>
+                                <select 
+                                    style={styles.dashGanttFormGroupInput}
+                                    value={this.state.isAddingSlot ? this.state.newSlot.professionalId : this.state.selectedSlot.professionalId} 
+                                    onChange={e => {
+                                        const professionalId = parseInt(e.target.value);
+                                        if (this.state.isAddingSlot) {
+                                            this.setState({ newSlot: { ...this.state.newSlot, professionalId } });
+                                        } else {
+                                            this.setState({ selectedSlot: { ...this.state.selectedSlot, professionalId } });
+                                        }
+                                    }}
+                                    disabled={!this.state.isAddingSlot}
+                                >
+                                    {this.props.professionals.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div style={styles.dashGanttFormGroup}>
+                                <label style={styles.dashGanttFormGroupLabel}>Start Time:</label>
+                                <input 
+                                    type="time" 
+                                    style={styles.dashGanttFormGroupInput}
+                                    value={this.state.isAddingSlot ? this.state.newSlot.start : this.state.selectedSlot.start} 
+                                    onChange={e => {
+                                        const start = e.target.value;
+                                        if (this.state.isAddingSlot) {
+                                            this.setState({ newSlot: { ...this.state.newSlot, start } });
+                                        } else {
+                                            this.setState({ selectedSlot: { ...this.state.selectedSlot, start } });
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <div style={styles.dashGanttFormGroup}>
+                                <label style={styles.dashGanttFormGroupLabel}>End Time:</label>
+                                <input 
+                                    type="time" 
+                                    style={styles.dashGanttFormGroupInput}
+                                    value={this.state.isAddingSlot ? this.state.newSlot.end : this.state.selectedSlot.end} 
+                                    onChange={e => {
+                                        const end = e.target.value;
+                                        if (this.state.isAddingSlot) {
+                                            this.setState({ newSlot: { ...this.state.newSlot, end } });
+                                        } else {
+                                            this.setState({ selectedSlot: { ...this.state.selectedSlot, end } });
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <div style={styles.dashGanttFormActions}>
+                                <button 
+                                    style={{...styles.dashGanttFormActionsButton, ...styles.dashGanttFormActionsSave}}
+                                    onClick={this.handleSaveSlot}
+                                >
+                                    Save
+                                </button>
+                                <button 
+                                    style={{...styles.dashGanttFormActionsButton, ...styles.dashGanttFormActionsCancel}}
+                                    onClick={this.handleCancelEdit}
+                                >
+                                    Cancel
+                                </button>
+                                {!this.state.isAddingSlot && (
+                                    <button 
+                                        style={{...styles.dashGanttFormActionsButton, ...styles.dashGanttFormActionsRemove}}
+                                        onClick={() => this.handleRemoveSlot(this.state.selectedSlot.id)}
+                                    >
+                                        Remove
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
             </div>
         );
     }
