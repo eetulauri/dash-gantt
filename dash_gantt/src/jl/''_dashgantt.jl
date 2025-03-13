@@ -6,18 +6,33 @@ export ''_dashgantt
     ''_dashgantt(;kwargs...)
 
 A DashGantt component.
-ExampleComponent is an example component.
-It takes a property, `label`, and
-displays it.
-It renders an input with the property `value`
-which is editable by the user.
+DashGantt is a Gantt chart component for scheduling.
+It displays professionals vertically and time horizontally.
+Users can add, modify, and remove timeslots for each professional.
+The component outputs data that can be used in a prediction model.
 Keyword arguments:
 - `id` (String; optional): The ID used to identify this component in Dash callbacks.
-- `label` (String; required): A label that will be printed when this component is rendered.
-- `value` (String; optional): The value displayed in the input.
+- `date` (String; optional): The date to display in the Gantt chart (YYYY-MM-DD).
+- `endHour` (Real; optional): The end hour of the day (e.g., 24 for midnight).
+- `professionals` (required): List of professionals to display in the Gantt chart.
+Each professional should have an id and name.. professionals has the following type: Array of lists containing elements 'id', 'name'.
+Those elements have the following types:
+  - `id` (Real; required)
+  - `name` (String; required)s
+- `slotDuration` (Real; optional): The duration of each slot in minutes.
+- `startHour` (Real; optional): The start hour of the day (e.g., 6 for 6:00 AM).
+- `timeslots` (optional): List of timeslots to display in the Gantt chart.
+Each timeslot should have an id, professionalId, start time, end time, and date.. timeslots has the following type: Array of lists containing elements 'id', 'professionalId', 'start', 'end', 'date', 'bookingProbability'.
+Those elements have the following types:
+  - `id` (Real; required)
+  - `professionalId` (Real; required)
+  - `start` (String; required)
+  - `end` (String; required)
+  - `date` (String; required)
+  - `bookingProbability` (Real; optional)s
 """
 function ''_dashgantt(; kwargs...)
-        available_props = Symbol[:id, :label, :value]
+        available_props = Symbol[:id, :date, :endHour, :professionals, :slotDuration, :startHour, :timeslots]
         wild_props = Symbol[]
         return Component("''_dashgantt", "DashGantt", "dash_gantt", available_props, wild_props; kwargs...)
 end
