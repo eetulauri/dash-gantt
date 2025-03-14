@@ -71,9 +71,13 @@ export default class DashGantt extends Component {
         
         // Always create a 20-minute slot regardless of slotDuration prop
         const slotDurationMinutes = 20; // Fixed 20-minute duration for created slots
-        const endTimeInMinutes = startHour * 60 + startMinutes + slotDurationMinutes;
-        const endHour = Math.floor(endTimeInMinutes / 60);
-        const endMinutes = endTimeInMinutes % 60;
+        
+        // Calculate end time, ensuring exact 20-minute duration
+        // We use integer math to avoid floating-point precision issues
+        const totalStartMinutes = (startHour * 60) + startMinutes;
+        const totalEndMinutes = totalStartMinutes + slotDurationMinutes;
+        const endHour = Math.floor(totalEndMinutes / 60);
+        const endMinutes = totalEndMinutes % 60;
         const endTime = `${endHour.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
         
         // Create new slot
@@ -190,9 +194,9 @@ export default class DashGantt extends Component {
         const durationInMinutes = durationInHours * 60;
         
         // Calculate how many grid cells this should span
-        // Use Math.ceil to ensure we always round up to the nearest cell
-        // This ensures we cover the full duration plus any partial cells
-        const numCells = Math.ceil(durationInMinutes / slotDuration);
+        // To avoid floating-point precision issues, round to the nearest integer
+        // For a 20-minute duration with 5-minute slots, this should consistently give 4 cells
+        const numCells = Math.round(durationInMinutes / slotDuration);
         
         // Log the calculation for debugging
         console.log(`Slot ${start}-${end}: Duration=${durationInMinutes}min, Spans ${numCells} cells`);
@@ -225,18 +229,17 @@ export default class DashGantt extends Component {
         const numCellsToSpan = this.calculateSlotWidth(slot.start, slot.end, slotDuration);
         
         // We need to make the rectangle fill exactly the grid cells it should span
-        // The key is to account for the borders between cells
+        // Calculate width to exactly fill the grid cells
         const slotStyle = {
             position: 'absolute',
             top: '2px',
             left: '0',
             height: 'calc(100% - 4px)',
-            // Calculate width to span the entire cells including borders between them
-            // For n cells, we need:
-            // - n*100% for the cells themselves
-            // - (n-1) pixels for the borders between cells (assuming 1px borders)
+            // For a consistent calculation that accounts for grid lines:
+            // - Multiply by 100% to get the percentage width
+            // - Add (numCells-1) pixels to account for the internal borders
             width: `calc(${numCellsToSpan * 100}% + ${numCellsToSpan - 1}px)`,
-            // Use border-box to include padding and borders in the element's total width
+            // Set box-sizing to border-box to include borders in element's dimensions
             boxSizing: 'border-box',
             backgroundColor: this.getProbabilityColor(slot.bookingProbability),
             color: 'white',
