@@ -189,11 +189,16 @@ export default class DashGantt extends Component {
         const durationInHours = endDecimal - startDecimal;
         const durationInMinutes = durationInHours * 60;
         
-        // Calculate how many grid cells this should span (ensure it's at least 1)
-        const numCells = Math.max(1, Math.round(durationInMinutes / slotDuration));
+        // Calculate how many grid cells this should span
+        // Use Math.ceil to ensure we always round up to the nearest cell
+        // This ensures we cover the full duration plus any partial cells
+        const numCells = Math.ceil(durationInMinutes / slotDuration);
         
-        // Return the number of cells to span
-        return numCells;
+        // Log the calculation for debugging
+        console.log(`Slot ${start}-${end}: Duration=${durationInMinutes}min, Spans ${numCells} cells`);
+        
+        // Return the exact number of cells to span (minimum 1)
+        return Math.max(1, numCells);
     }
     
     // Format decimal hours to time string
@@ -219,16 +224,20 @@ export default class DashGantt extends Component {
         // Calculate the number of cells this slot should span
         const numCellsToSpan = this.calculateSlotWidth(slot.start, slot.end, slotDuration);
         
-        // For a multi-cell spanning slot, we need to account for borders
-        // We do this by making the width exactly span all cells including their borders
+        // We need to make the rectangle fill exactly the grid cells it should span
+        // The key is to account for the borders between cells
         const slotStyle = {
             position: 'absolute',
             top: '2px',
             left: '0',
             height: 'calc(100% - 4px)',
-            // Set width to exactly span the right number of cells
-            // For n cells, we need n*100% width plus (n-1) border widths
-            width: `calc(${numCellsToSpan * 100}% - 1px)`,
+            // Calculate width to span the entire cells including borders between them
+            // For n cells, we need:
+            // - n*100% for the cells themselves
+            // - (n-1) pixels for the borders between cells (assuming 1px borders)
+            width: `calc(${numCellsToSpan * 100}% + ${numCellsToSpan - 1}px)`,
+            // Use border-box to include padding and borders in the element's total width
+            boxSizing: 'border-box',
             backgroundColor: this.getProbabilityColor(slot.bookingProbability),
             color: 'white',
             borderRadius: '4px',
@@ -302,11 +311,12 @@ export default class DashGantt extends Component {
                 // Format time for display in the hover tooltip
                 const timeDisplay = this.formatTime(hour, minute);
                 
-                // Adjust the cell's border style to create a grid-like appearance
+                // Create a consistent cell style with proper borders
+                // Hour borders are thicker for better visual separation
                 const cellStyle = {
                     ...styles.dashGanttTimeCell,
                     backgroundColor: isHovered ? '#f0f0f0' : 'transparent',
-                    borderLeft: minute === 0 ? '1px solid #ccc' : '1px solid #eee',
+                    borderLeft: minute === 0 ? '1px solid #ccc' : 'none',  // Only show left border at hour boundaries
                     position: 'relative'
                 };
                 
@@ -406,11 +416,12 @@ export default class DashGantt extends Component {
             dashGanttTimeCell: {
                 position: 'relative',
                 padding: '0',
-                borderRight: '0',  // We'll set borders individually in the cells
+                borderRight: '1px solid #eee',  // Consistent border for all cells
                 borderBottom: '1px solid #ccc',
                 cursor: 'pointer',
                 height: '60px',
-                width: `${100 / totalSlots}%` // Equal width for each time slot
+                width: `${100 / totalSlots}%`, // Equal width for each time slot
+                boxSizing: 'border-box' // Include borders in width calculation
             },
             dashGanttSlot: {
                 position: 'absolute',
