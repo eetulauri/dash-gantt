@@ -50,7 +50,7 @@ app.layout = html.Div([
             date="2025-03-14",
             display_format='YYYY-MM-DD'
         )
-    ], style={'margin-bottom': '20px'}),
+    ], style={'marginBottom': '20px'}),
     
     dash_gantt.DashGantt(
         id='gantt-chart',

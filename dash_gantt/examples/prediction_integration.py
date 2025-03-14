@@ -64,7 +64,7 @@ app.layout = html.Div([
             'borderRadius': '4px',
             'cursor': 'pointer'
         })
-    ], style={'margin-bottom': '20px'}),
+    ], style={'marginBottom': '20px'}),
     
     dash_gantt.DashGantt(
         id='gantt-chart',

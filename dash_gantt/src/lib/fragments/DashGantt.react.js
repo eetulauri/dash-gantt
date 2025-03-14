@@ -32,6 +32,10 @@ export default class DashGantt extends Component {
         this.handleCellHover = this.handleCellHover.bind(this);
         this.handleCellLeave = this.handleCellLeave.bind(this);
         this.renderSlotRectangle = this.renderSlotRectangle.bind(this);
+        this.generateTimeCells = this.generateTimeCells.bind(this);
+        this.formatTime = this.formatTime.bind(this);
+        this.timeToDecimal = this.timeToDecimal.bind(this);
+        this.calculateSlotWidth = this.calculateSlotWidth.bind(this);
     }
     
     // Handle clicking on a timeslot
@@ -177,6 +181,21 @@ export default class DashGantt extends Component {
         return hours + (minutes / 60);
     }
     
+    // Calculate the width of a slot that should span multiple cells
+    calculateSlotWidth(start, end, slotDuration) {
+        // Calculate duration in minutes
+        const startDecimal = this.timeToDecimal(start);
+        const endDecimal = this.timeToDecimal(end);
+        const durationInHours = endDecimal - startDecimal;
+        const durationInMinutes = durationInHours * 60;
+        
+        // Calculate how many grid cells this should span (ensure it's at least 1)
+        const numCells = Math.max(1, Math.round(durationInMinutes / slotDuration));
+        
+        // Return the number of cells to span
+        return numCells;
+    }
+    
     // Format decimal hours to time string
     decimalToTime(decimal) {
         const hours = Math.floor(decimal);
@@ -193,44 +212,23 @@ export default class DashGantt extends Component {
         return '#F44336'; // Red for low probability
     }
     
-    // Calculate the width of a slot as a percentage
-    calculateSlotWidth(slot) {
-        const { slotDuration, startHour, endHour } = this.props;
-        
-        // Calculate slot duration in minutes
-        const startDecimal = this.timeToDecimal(slot.start);
-        const endDecimal = this.timeToDecimal(slot.end);
-        const durationInHours = endDecimal - startDecimal;
-        const durationInMinutes = durationInHours * 60;
-        
-        // Calculate how many slotDuration intervals this covers
-        const slotCount = durationInMinutes / slotDuration;
-        
-        // Calculate total number of slots in the entire row
-        const totalHours = endHour - startHour;
-        const totalSlots = totalHours * (60 / slotDuration);
-        
-        // Return the percentage width relative to the entire row
-        return (slotCount / totalSlots) * 100;
-    }
-    
     // Render a single slot rectangle
     renderSlotRectangle(slot) {
         const { slotDuration } = this.props;
         
-        // Calculate slot duration in minutes
-        const slotStart = this.timeToDecimal(slot.start);
-        const slotEnd = this.timeToDecimal(slot.end);
-        const durationInHours = slotEnd - slotStart;
-        const durationInMinutes = durationInHours * 60;
+        // Calculate the number of cells this slot should span
+        const numCellsToSpan = this.calculateSlotWidth(slot.start, slot.end, slotDuration);
         
-        // Calculate how many 5-minute slots this covers
-        const slotCount = durationInMinutes / slotDuration;
-        
+        // For a multi-cell spanning slot, we need to account for borders
+        // We do this by making the width exactly span all cells including their borders
         const slotStyle = {
             position: 'absolute',
-            top: '0',
-            height: '100%',
+            top: '2px',
+            left: '0',
+            height: 'calc(100% - 4px)',
+            // Set width to exactly span the right number of cells
+            // For n cells, we need n*100% width plus (n-1) border widths
+            width: `calc(${numCellsToSpan * 100}% - 1px)`,
             backgroundColor: this.getProbabilityColor(slot.bookingProbability),
             color: 'white',
             borderRadius: '4px',
@@ -239,10 +237,7 @@ export default class DashGantt extends Component {
             alignItems: 'center',
             cursor: 'pointer',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            zIndex: 10,
-            overflow: 'hidden',
-            width: `calc(${slotCount * 100}%)`, // Each cell is 100% wide, so multiply by slotCount
-            left: 0
+            zIndex: 100
         };
         
         const probabilityStyle = {
@@ -258,6 +253,7 @@ export default class DashGantt extends Component {
                     e.stopPropagation();
                     this.handleSlotClick(slot);
                 }}
+                title={`Time slot: ${slot.start} - ${slot.end} (Booking probability: ${Math.round(slot.bookingProbability * 100)}%)`}
             >
                 {slot.bookingProbability !== undefined && (
                     <div style={probabilityStyle}>
@@ -268,11 +264,99 @@ export default class DashGantt extends Component {
         );
     }
     
+    // Format time for display (HH:MM)
+    formatTime(hour, minute) {
+        return `${Math.floor(hour).toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    }
+    
+    // Generate time cells for each hour and minute interval
+    generateTimeCells(professional, styles) {
+        const { timeslots, startHour, endHour, slotDuration } = this.props;
+        const slotsPerHour = 60 / slotDuration;
+        const cells = [];
+        const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
+        
+        // Group slots by their start time for more efficient lookup
+        const slotsByStartTime = {};
+        professionalSlots.forEach(slot => {
+            const [hour, minute] = slot.start.split(':').map(Number);
+            const key = `${hour}:${minute}`;
+            slotsByStartTime[key] = slot;
+        });
+        
+        // Iterate through each time slot for this professional
+        for (let hour = startHour; hour <= endHour; hour++) {
+            for (let minuteIndex = 0; minuteIndex < slotsPerHour; minuteIndex++) {
+                const minute = minuteIndex * slotDuration;
+                const timeKey = `${hour}:${minute}`;
+                const displayTimeKey = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                
+                // Check if this cell is the start of a time slot
+                const slot = slotsByStartTime[timeKey];
+                
+                const isHovered = this.state.hoveredCell && 
+                                this.state.hoveredCell.professionalId === professional.id && 
+                                this.state.hoveredCell.hour === hour &&
+                                this.state.hoveredCell.minute === minute;
+                
+                // Format time for display in the hover tooltip
+                const timeDisplay = this.formatTime(hour, minute);
+                
+                // Adjust the cell's border style to create a grid-like appearance
+                const cellStyle = {
+                    ...styles.dashGanttTimeCell,
+                    backgroundColor: isHovered ? '#f0f0f0' : 'transparent',
+                    borderLeft: minute === 0 ? '1px solid #ccc' : '1px solid #eee',
+                    position: 'relative'
+                };
+                
+                // Create the cell for this time slot
+                const cell = (
+                    <td 
+                        key={`cell-${professional.id}-${displayTimeKey}`} 
+                        style={cellStyle}
+                        onClick={() => this.handleCreateSlot(professional.id, hour, minute)}
+                        onMouseEnter={() => this.handleCellHover(professional.id, hour, minute)}
+                        onMouseLeave={this.handleCellLeave}
+                        title={`Time: ${timeDisplay}`}
+                    >
+                        {slot && this.renderSlotRectangle(slot)}
+                        
+                        {/* Show time on hover */}
+                        {isHovered && (
+                            <div style={{
+                                position: 'absolute',
+                                bottom: '2px',
+                                right: '2px',
+                                fontSize: '10px',
+                                color: '#666',
+                                pointerEvents: 'none',
+                                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                                padding: '1px 3px',
+                                borderRadius: '2px',
+                                zIndex: 200
+                            }}>
+                                {timeDisplay}
+                            </div>
+                        )}
+                    </td>
+                );
+                
+                cells.push(cell);
+            }
+        }
+        
+        return cells;
+    }
+    
     render() {
         const { id, professionals, date, timeslots, startHour, endHour, slotDuration } = this.props;
         
         // Calculate number of time slots per hour (e.g., 3 for 20-minute slots)
         const slotsPerHour = 60 / slotDuration;
+        
+        // Calculate total number of slots in the timeline
+        const totalSlots = (endHour - startHour) * slotsPerHour;
         
         const styles = {
             dashGantt: {
@@ -322,11 +406,11 @@ export default class DashGantt extends Component {
             dashGanttTimeCell: {
                 position: 'relative',
                 padding: '0',
-                borderRight: '1px solid #eee',
+                borderRight: '0',  // We'll set borders individually in the cells
                 borderBottom: '1px solid #ccc',
                 cursor: 'pointer',
                 height: '60px',
-                width: `${100 / (slotsPerHour * (endHour - startHour))}%`
+                width: `${100 / totalSlots}%` // Equal width for each time slot
             },
             dashGanttSlot: {
                 position: 'absolute',
@@ -408,67 +492,6 @@ export default class DashGantt extends Component {
             hourLabels.push(timeLabel);
         }
         
-        // Generate time cells for each hour and minute interval
-        const generateTimeCells = (professional) => {
-            const cells = [];
-            const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
-            
-            // Iterate through each time slot for this professional
-            for (let hour = startHour; hour <= endHour; hour++) {
-                for (let minuteIndex = 0; minuteIndex < slotsPerHour; minuteIndex++) {
-                    const minute = minuteIndex * slotDuration;
-                    const timeKey = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                    
-                    // Determine if the current cell is the start of a time slot
-                    const startingSlot = professionalSlots.find(slot => {
-                        const [slotHour, slotMinute] = slot.start.split(':').map(Number);
-                        return slotHour === hour && slotMinute === minute;
-                    });
-                    
-                    // Determine if the current cell is inside any existing time slot
-                    const cellTime = hour + (minute / 60);
-                    const isWithinSlot = professionalSlots.find(slot => {
-                        const slotStart = this.timeToDecimal(slot.start);
-                        const slotEnd = this.timeToDecimal(slot.end);
-                        return cellTime >= slotStart && cellTime < slotEnd;
-                    });
-                    
-                    const isHovered = this.state.hoveredCell && 
-                                    this.state.hoveredCell.professionalId === professional.id && 
-                                    this.state.hoveredCell.hour === hour &&
-                                    this.state.hoveredCell.minute === minute;
-                    
-                    // Create the cell for this time slot
-                    const cell = (
-                        <td 
-                            key={`cell-${professional.id}-${timeKey}`} 
-                            style={{
-                                ...styles.dashGanttTimeCell,
-                                backgroundColor: isHovered ? '#f0f0f0' : 'transparent',
-                                borderLeft: minute === 0 ? '1px solid #ccc' : 'none',
-                                position: 'relative'
-                            }}
-                            onClick={() => this.handleCreateSlot(professional.id, hour, minute)}
-                            onMouseEnter={() => this.handleCellHover(professional.id, hour, minute)}
-                            onMouseLeave={this.handleCellLeave}
-                        >
-                            {/* Render slot only if this is the starting cell */}
-                            {startingSlot && this.renderSlotRectangle(startingSlot)}
-                            
-                            {/* If we're inside a slot but not at the start, render empty space */}
-                            {!startingSlot && isWithinSlot && (
-                                <div style={{ height: '100%' }}></div>
-                            )}
-                        </td>
-                    );
-                    
-                    cells.push(cell);
-                }
-            }
-            
-            return cells;
-        };
-        
         // Generate hour header cells
         const generateHourHeaderCells = () => {
             const cells = [];
@@ -512,7 +535,7 @@ export default class DashGantt extends Component {
                                     <td style={styles.dashGanttProfessionalCell}>
                                         {professional.name}
                                     </td>
-                                    {generateTimeCells(professional)}
+                                    {this.generateTimeCells(professional, styles)}
                                 </tr>
                             ))}
                         </tbody>
