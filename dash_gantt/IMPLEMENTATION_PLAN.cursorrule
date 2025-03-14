@@ -46,6 +46,8 @@ This document outlines the implementation plan for a custom Gantt chart componen
 - [x] Replace JSX styling with inline styles using camelCase
 - [x] Ensure proper rendering of timeslots on the timeline
 - [x] Fix console warnings and errors
+- [x] Improve alignment of timeslots with the underlying grid
+- [x] Switch to table-based layout for better alignment and structure
 
 ## Data Structure
 ```javascript
@@ -97,6 +99,7 @@ This document outlines the implementation plan for a custom Gantt chart componen
 - [2023-03-13] Implemented color coding based on booking probability
 - [2023-03-13] Fixed styling issues by replacing JSX styling with inline styles
 - [2023-03-13] Fixed console warnings related to CSS properties
+- [2023-03-13] Improved alignment of timeslots with the underlying grid by switching to a table-based layout
 
 ## Next Steps
 1. Test the component with real data
@@ -120,3 +123,4 @@ This document outlines the implementation plan for a custom Gantt chart componen
 - [x] Added color coding based on booking probability (green for high, yellow for medium, red for low)
 - [x] Fixed styling issues by replacing JSX styling with inline styles
 - [x] Fixed console warnings related to CSS properties 
+- [x] Improved alignment of timeslots with the underlying grid by switching to a table-based layout 

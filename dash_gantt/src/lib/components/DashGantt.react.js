@@ -21,7 +21,7 @@ DashGantt.defaultProps = {
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
-    slotDuration: 60, // 60 minutes
+    slotDuration: 20, // 20 minutes
 };
 
 DashGantt.propTypes = {

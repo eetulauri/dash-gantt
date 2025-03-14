@@ -31,7 +31,7 @@ Keyword arguments:
 
     - name (string; required)
 
-- slotDuration (number; default 60):
+- slotDuration (number; default 20):
     The duration of each slot in minutes.
 
 - startHour (number; default 6):

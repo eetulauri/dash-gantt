@@ -41,9 +41,9 @@ export default class DashGantt extends Component {
     }
     
     // Handle cell hover
-    handleCellHover(professionalId, hour) {
+    handleCellHover(professionalId, hour, minute) {
         this.setState({
-            hoveredCell: { professionalId, hour }
+            hoveredCell: { professionalId, hour, minute }
         });
     }
     
@@ -55,10 +55,10 @@ export default class DashGantt extends Component {
     }
     
     // Handle adding a new timeslot
-    handleAddSlot(professionalId, hour) {
+    handleAddSlot(professionalId, hour, minute) {
         const { slotDuration } = this.props;
         const startHour = Math.floor(hour);
-        const startMinutes = (hour - startHour) * 60;
+        const startMinutes = minute;
         const startTime = `${startHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
         
         const endTimeInMinutes = startHour * 60 + startMinutes + slotDuration;
@@ -150,22 +150,6 @@ export default class DashGantt extends Component {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
     
-    // Calculate position and width for a timeslot
-    calculateSlotStyle(slot, startHour, endHour) {
-        const slotStart = this.timeToDecimal(slot.start);
-        const slotEnd = this.timeToDecimal(slot.end);
-        
-        // Calculate position as percentage of the total width
-        const totalHours = endHour - startHour;
-        const left = ((slotStart - startHour) / totalHours) * 100;
-        const width = ((slotEnd - slotStart) / totalHours) * 100;
-        
-        return {
-            left: `${left}%`,
-            width: `${width}%`
-        };
-    }
-    
     // Get color based on booking probability
     getProbabilityColor(probability) {
         if (probability === undefined) return '#4CAF50'; // Default green
@@ -175,171 +159,11 @@ export default class DashGantt extends Component {
         return '#F44336'; // Red for low probability
     }
     
-    // Render time header (hours)
-    renderTimeHeader() {
-        const { startHour, endHour } = this.props;
-        const hours = [];
-        
-        // Create hour markers for the time header
-        for (let hour = startHour; hour <= endHour; hour++) {
-            const displayHour = hour % 24; // Handle 24-hour format
-            const isPM = displayHour >= 12;
-            const display12Hour = displayHour === 0 ? 12 : (displayHour > 12 ? displayHour - 12 : displayHour);
-            const timeLabel = `${display12Hour}${isPM ? 'PM' : 'AM'}`;
-            
-            hours.push(
-                <div key={`hour-${hour}`} className="dash-gantt-hour">
-                    {timeLabel}
-                </div>
-            );
-        }
-        
-        return (
-            <div className="dash-gantt-time-header">
-                <div className="dash-gantt-empty-cell"></div>
-                <div className="dash-gantt-hours">
-                    {hours}
-                </div>
-            </div>
-        );
-    }
-    
-    // Render a professional row
-    renderProfessionalRow(professional) {
-        const { startHour, endHour, timeslots } = this.props;
-        const { hoveredCell } = this.state;
-        const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
-        
-        return (
-            <div key={`row-${professional.id}`} className="dash-gantt-row">
-                <div className="dash-gantt-professional">
-                    {professional.name}
-                </div>
-                <div className="dash-gantt-timeline">
-                    {/* Render grid lines for each hour */}
-                    {Array.from({ length: endHour - startHour + 1 }, (_, i) => (
-                        <div 
-                            key={`grid-${i}`} 
-                            className="dash-gantt-grid-line"
-                            onClick={() => this.handleAddSlot(professional.id, startHour + i)}
-                            onMouseEnter={() => this.handleCellHover(professional.id, startHour + i)}
-                            onMouseLeave={this.handleCellLeave}
-                            style={{
-                                backgroundColor: hoveredCell && 
-                                                hoveredCell.professionalId === professional.id && 
-                                                hoveredCell.hour === startHour + i ? 
-                                                '#f0f0f0' : 'transparent'
-                            }}
-                        />
-                    ))}
-                    
-                    {/* Render timeslots */}
-                    {professionalSlots.map(slot => {
-                        const slotStyle = this.calculateSlotStyle(slot, startHour, endHour);
-                        const backgroundColor = this.getProbabilityColor(slot.bookingProbability);
-                        
-                        return (
-                            <div 
-                                key={`slot-${slot.id}`} 
-                                className="dash-gantt-slot"
-                                style={{
-                                    ...slotStyle,
-                                    backgroundColor
-                                }}
-                                onClick={() => this.handleSlotClick(slot)}
-                            >
-                                <div className="dash-gantt-slot-time">
-                                    {slot.start} - {slot.end}
-                                </div>
-                                {slot.bookingProbability !== undefined && (
-                                    <div className="dash-gantt-probability">
-                                        {Math.round(slot.bookingProbability * 100)}%
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    }
-    
-    // Render the slot editor
-    renderSlotEditor() {
-        const { professionals } = this.props;
-        const { selectedSlot, isAddingSlot, newSlot } = this.state;
-        
-        const slot = isAddingSlot ? newSlot : selectedSlot;
-        
-        if (!slot) return null;
-        
-        return (
-            <div className="dash-gantt-editor">
-                <h3>{isAddingSlot ? 'Add New Slot' : 'Edit Slot'}</h3>
-                <div className="dash-gantt-form">
-                    <div className="dash-gantt-form-group">
-                        <label>Professional:</label>
-                        <select 
-                            value={slot.professionalId} 
-                            onChange={e => {
-                                const updatedSlot = { ...slot, professionalId: parseInt(e.target.value) };
-                                if (isAddingSlot) {
-                                    this.setState({ newSlot: updatedSlot });
-                                } else {
-                                    this.setState({ selectedSlot: updatedSlot });
-                                }
-                            }}
-                            disabled={!isAddingSlot}
-                        >
-                            {professionals.map(p => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="dash-gantt-form-group">
-                        <label>Start Time:</label>
-                        <input 
-                            type="time" 
-                            value={slot.start} 
-                            onChange={e => {
-                                const updatedSlot = { ...slot, start: e.target.value };
-                                if (isAddingSlot) {
-                                    this.setState({ newSlot: updatedSlot });
-                                } else {
-                                    this.setState({ selectedSlot: updatedSlot });
-                                }
-                            }}
-                        />
-                    </div>
-                    <div className="dash-gantt-form-group">
-                        <label>End Time:</label>
-                        <input 
-                            type="time" 
-                            value={slot.end} 
-                            onChange={e => {
-                                const updatedSlot = { ...slot, end: e.target.value };
-                                if (isAddingSlot) {
-                                    this.setState({ newSlot: updatedSlot });
-                                } else {
-                                    this.setState({ selectedSlot: updatedSlot });
-                                }
-                            }}
-                        />
-                    </div>
-                    <div className="dash-gantt-form-actions">
-                        <button onClick={this.handleSaveSlot}>Save</button>
-                        <button onClick={this.handleCancelEdit}>Cancel</button>
-                        {!isAddingSlot && (
-                            <button onClick={() => this.handleRemoveSlot(selectedSlot.id)}>Remove</button>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    }
-    
     render() {
-        const { id, professionals, date } = this.props;
+        const { id, professionals, date, timeslots, startHour, endHour, slotDuration } = this.props;
+        
+        // Calculate number of time slots per hour (e.g., 3 for 20-minute slots)
+        const slotsPerHour = 60 / slotDuration;
         
         const styles = {
             dashGantt: {
@@ -352,81 +176,67 @@ export default class DashGantt extends Component {
             dashGanttContainer: {
                 border: '1px solid #ccc',
                 borderRadius: '4px',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                overflowX: 'auto'
             },
-            dashGanttTimeHeader: {
-                display: 'flex',
-                borderBottom: '1px solid #ccc',
+            dashGanttTable: {
+                width: '100%',
+                borderCollapse: 'collapse',
+                tableLayout: 'fixed'
+            },
+            dashGanttHeaderRow: {
                 backgroundColor: '#f5f5f5'
             },
-            dashGanttEmptyCell: {
-                width: '150px',
-                borderRight: '1px solid #ccc'
-            },
-            dashGanttHours: {
-                display: 'flex',
-                flex: 1
-            },
-            dashGanttHour: {
-                flex: 1,
+            dashGanttHeaderCell: {
                 padding: '8px',
                 textAlign: 'center',
                 fontWeight: 'bold',
-                borderRight: '1px solid #ccc'
+                borderRight: '1px solid #ccc',
+                borderBottom: '1px solid #ccc'
+            },
+            dashGanttFirstHeaderCell: {
+                width: '150px',
+                borderRight: '1px solid #ccc',
+                borderBottom: '1px solid #ccc'
             },
             dashGanttRow: {
-                display: 'flex',
-                borderBottom: '1px solid #ccc',
                 height: '60px'
             },
-            dashGanttProfessional: {
+            dashGanttProfessionalCell: {
                 width: '150px',
                 padding: '8px',
                 borderRight: '1px solid #ccc',
+                borderBottom: '1px solid #ccc',
                 backgroundColor: '#f9f9f9',
-                display: 'flex',
-                alignItems: 'center'
+                verticalAlign: 'middle'
             },
-            dashGanttTimeline: {
-                flex: 1,
+            dashGanttTimeCell: {
                 position: 'relative',
-                display: 'flex'
-            },
-            dashGanttGridLine: {
-                flex: 1,
-                height: '100%',
+                padding: '0',
                 borderRight: '1px solid #eee',
-                cursor: 'pointer'
+                borderBottom: '1px solid #ccc',
+                cursor: 'pointer',
+                height: '60px',
+                width: `${100 / (slotsPerHour * (endHour - startHour + 1))}%`
             },
             dashGanttSlot: {
                 position: 'absolute',
-                top: '5px',
-                height: 'calc(100% - 10px)',
+                top: '0',
+                left: '0',
+                height: '100%',
+                width: '100%',
                 backgroundColor: '#4CAF50',
                 color: 'white',
                 borderRadius: '4px',
-                padding: '5px',
-                fontSize: '12px',
                 display: 'flex',
-                flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
                 cursor: 'pointer',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
                 zIndex: 10
             },
-            dashGanttSlotHover: {
-                boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-            },
-            dashGanttSlotTime: {
-                fontWeight: 'bold',
-                marginBottom: '2px'
-            },
             dashGanttProbability: {
-                fontSize: '10px',
+                fontSize: '14px',
                 fontWeight: 'bold'
             },
             dashGanttEditor: {
@@ -480,94 +290,148 @@ export default class DashGantt extends Component {
             }
         };
         
+        // Generate hour labels
+        const hourLabels = [];
+        for (let hour = startHour; hour <= endHour; hour++) {
+            const displayHour = hour % 24; // Handle 24-hour format
+            const isPM = displayHour >= 12;
+            const display12Hour = displayHour === 0 ? 12 : (displayHour > 12 ? displayHour - 12 : displayHour);
+            const timeLabel = `${display12Hour}${isPM ? 'PM' : 'AM'}`;
+            hourLabels.push(timeLabel);
+        }
+        
+        // Generate time cells for each hour and minute interval
+        const generateTimeCells = (professional) => {
+            const cells = [];
+            const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
+            
+            for (let hour = startHour; hour <= endHour; hour++) {
+                for (let minuteIndex = 0; minuteIndex < slotsPerHour; minuteIndex++) {
+                    const minute = minuteIndex * slotDuration;
+                    const timeKey = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    
+                    // Check if there's a slot that starts at this exact time
+                    const matchingSlot = professionalSlots.find(slot => {
+                        const [slotHour, slotMinute] = slot.start.split(':').map(Number);
+                        return slotHour === hour && slotMinute === minute;
+                    });
+                    
+                    // Check if this time is within any slot's range
+                    const isWithinSlot = professionalSlots.find(slot => {
+                        const slotStart = this.timeToDecimal(slot.start);
+                        const slotEnd = this.timeToDecimal(slot.end);
+                        const currentTime = hour + (minute / 60);
+                        
+                        // Check if current time is within the slot's range
+                        return currentTime >= slotStart && currentTime < slotEnd;
+                    });
+                    
+                    const isHovered = this.state.hoveredCell && 
+                                    this.state.hoveredCell.professionalId === professional.id && 
+                                    this.state.hoveredCell.hour === hour &&
+                                    this.state.hoveredCell.minute === minute;
+                    
+                    cells.push(
+                        <td 
+                            key={`cell-${professional.id}-${timeKey}`} 
+                            style={{
+                                ...styles.dashGanttTimeCell,
+                                backgroundColor: isHovered ? '#f0f0f0' : 'transparent',
+                                borderLeft: minute === 0 ? '1px solid #ccc' : 'none'
+                            }}
+                            onClick={() => this.handleAddSlot(professional.id, hour, minute)}
+                            onMouseEnter={() => this.handleCellHover(professional.id, hour, minute)}
+                            onMouseLeave={this.handleCellLeave}
+                        >
+                            {matchingSlot && (
+                                <div 
+                                    key={`slot-${matchingSlot.id}`} 
+                                    style={{
+                                        ...styles.dashGanttSlot,
+                                        backgroundColor: this.getProbabilityColor(matchingSlot.bookingProbability)
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        this.handleSlotClick(matchingSlot);
+                                    }}
+                                >
+                                    {matchingSlot.bookingProbability !== undefined && (
+                                        <div style={styles.dashGanttProbability}>
+                                            {Math.round(matchingSlot.bookingProbability * 100)}%
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {!matchingSlot && isWithinSlot && (
+                                <div 
+                                    style={{
+                                        ...styles.dashGanttSlot,
+                                        backgroundColor: this.getProbabilityColor(isWithinSlot.bookingProbability)
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        this.handleSlotClick(isWithinSlot);
+                                    }}
+                                >
+                                    {/* No content for continuation cells */}
+                                </div>
+                            )}
+                        </td>
+                    );
+                }
+            }
+            
+            return cells;
+        };
+        
+        // Generate hour header cells
+        const generateHourHeaderCells = () => {
+            const cells = [];
+            
+            for (let hour = startHour; hour <= endHour; hour++) {
+                const displayHour = hour % 24; // Handle 24-hour format
+                const isPM = displayHour >= 12;
+                const display12Hour = displayHour === 0 ? 12 : (displayHour > 12 ? displayHour - 12 : displayHour);
+                const timeLabel = `${display12Hour}${isPM ? 'PM' : 'AM'}`;
+                
+                cells.push(
+                    <th 
+                        key={`header-${hour}`} 
+                        colSpan={slotsPerHour}
+                        style={styles.dashGanttHeaderCell}
+                    >
+                        {timeLabel}
+                    </th>
+                );
+            }
+            
+            return cells;
+        };
+        
         return (
             <div id={id} style={styles.dashGantt}>
                 <div style={styles.dashGanttHeader}>
                     <h2>Schedule for {date}</h2>
                 </div>
                 <div style={styles.dashGanttContainer}>
-                    <div style={styles.dashGanttTimeHeader}>
-                        <div style={styles.dashGanttEmptyCell}></div>
-                        <div style={styles.dashGanttHours}>
-                            {/* Create hour markers for the time header */}
-                            {Array.from({ length: this.props.endHour - this.props.startHour + 1 }, (_, i) => {
-                                const hour = this.props.startHour + i;
-                                const displayHour = hour % 24; // Handle 24-hour format
-                                const isPM = displayHour >= 12;
-                                const display12Hour = displayHour === 0 ? 12 : (displayHour > 12 ? displayHour - 12 : displayHour);
-                                const timeLabel = `${display12Hour}${isPM ? 'PM' : 'AM'}`;
-                                
-                                return (
-                                    <div key={`hour-${hour}`} style={styles.dashGanttHour}>
-                                        {timeLabel}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    <div>
-                        {professionals.map(professional => {
-                            const professionalSlots = this.props.timeslots.filter(slot => slot.professionalId === professional.id);
-                            
-                            return (
-                                <div key={`row-${professional.id}`} style={styles.dashGanttRow}>
-                                    <div style={styles.dashGanttProfessional}>
+                    <table style={styles.dashGanttTable}>
+                        <thead>
+                            <tr style={styles.dashGanttHeaderRow}>
+                                <th style={styles.dashGanttFirstHeaderCell}></th>
+                                {generateHourHeaderCells()}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {professionals.map(professional => (
+                                <tr key={`row-${professional.id}`} style={styles.dashGanttRow}>
+                                    <td style={styles.dashGanttProfessionalCell}>
                                         {professional.name}
-                                    </div>
-                                    <div style={styles.dashGanttTimeline}>
-                                        {/* Render grid lines for each hour */}
-                                        {Array.from({ length: this.props.endHour - this.props.startHour + 1 }, (_, i) => {
-                                            const hour = this.props.startHour + i;
-                                            const isHovered = this.state.hoveredCell && 
-                                                            this.state.hoveredCell.professionalId === professional.id && 
-                                                            this.state.hoveredCell.hour === hour;
-                                            
-                                            return (
-                                                <div 
-                                                    key={`grid-${i}`} 
-                                                    style={{
-                                                        ...styles.dashGanttGridLine,
-                                                        backgroundColor: isHovered ? '#f0f0f0' : 'transparent'
-                                                    }}
-                                                    onClick={() => this.handleAddSlot(professional.id, hour)}
-                                                    onMouseEnter={() => this.handleCellHover(professional.id, hour)}
-                                                    onMouseLeave={this.handleCellLeave}
-                                                />
-                                            );
-                                        })}
-                                        
-                                        {/* Render timeslots */}
-                                        {professionalSlots.map(slot => {
-                                            const slotStyle = this.calculateSlotStyle(slot, this.props.startHour, this.props.endHour);
-                                            const backgroundColor = this.getProbabilityColor(slot.bookingProbability);
-                                            
-                                            return (
-                                                <div 
-                                                    key={`slot-${slot.id}`} 
-                                                    style={{
-                                                        ...styles.dashGanttSlot,
-                                                        left: slotStyle.left,
-                                                        width: slotStyle.width,
-                                                        backgroundColor
-                                                    }}
-                                                    onClick={() => this.handleSlotClick(slot)}
-                                                >
-                                                    <div style={styles.dashGanttSlotTime}>
-                                                        {slot.start} - {slot.end}
-                                                    </div>
-                                                    {slot.bookingProbability !== undefined && (
-                                                        <div style={styles.dashGanttProbability}>
-                                                            {Math.round(slot.bookingProbability * 100)}%
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                    </td>
+                                    {generateTimeCells(professional)}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
                 
                 {/* Render slot editor */}
@@ -590,7 +454,7 @@ export default class DashGantt extends Component {
                                     }}
                                     disabled={!this.state.isAddingSlot}
                                 >
-                                    {this.props.professionals.map(p => (
+                                    {professionals.map(p => (
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
@@ -662,7 +526,7 @@ DashGantt.defaultProps = {
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
-    slotDuration: 60, // 60 minutes
+    slotDuration: 20, // 20 minutes
 };
 
 DashGantt.propTypes = {
