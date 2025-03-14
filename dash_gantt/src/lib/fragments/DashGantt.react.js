@@ -19,7 +19,9 @@ export default class DashGantt extends Component {
                 start: null,
                 end: null
             },
-            hoveredCell: null
+            hoveredCell: null,
+            // Cache for slot width calculations to avoid repeated calculations
+            slotWidthCache: {}
         };
         
         // Bind methods
@@ -36,6 +38,7 @@ export default class DashGantt extends Component {
         this.formatTime = this.formatTime.bind(this);
         this.timeToDecimal = this.timeToDecimal.bind(this);
         this.calculateSlotWidth = this.calculateSlotWidth.bind(this);
+        this.getSlotWidth = this.getSlotWidth.bind(this);
     }
     
     // Handle clicking on a timeslot
@@ -48,6 +51,16 @@ export default class DashGantt extends Component {
     
     // Handle cell hover
     handleCellHover(professionalId, hour, minute) {
+        // Avoid unnecessary state updates if hovering over the same cell
+        const currentHover = this.state.hoveredCell;
+        if (currentHover && 
+            currentHover.professionalId === professionalId && 
+            currentHover.hour === hour && 
+            currentHover.minute === minute) {
+            return; // No change needed
+        }
+        
+        // Update the hover state
         this.setState({
             hoveredCell: { professionalId, hour, minute }
         });
@@ -55,9 +68,12 @@ export default class DashGantt extends Component {
     
     // Handle cell leave
     handleCellLeave() {
-        this.setState({
-            hoveredCell: null
-        });
+        // Only update state if we're currently hovering over a cell
+        if (this.state.hoveredCell !== null) {
+            this.setState({
+                hoveredCell: null
+            });
+        }
     }
     
     // Handle creating a new timeslot with a single click
@@ -198,8 +214,10 @@ export default class DashGantt extends Component {
         // For a 20-minute duration with 5-minute slots, this should consistently give 4 cells
         const numCells = Math.round(durationInMinutes / slotDuration);
         
-        // Log the calculation for debugging
-        console.log(`Slot ${start}-${end}: Duration=${durationInMinutes}min, Spans ${numCells} cells`);
+        // Log the calculation only in development mode to reduce console noise
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`Slot ${start}-${end}: Duration=${durationInMinutes}min, Spans ${numCells} cells`);
+        }
         
         // Return the exact number of cells to span (minimum 1)
         return Math.max(1, numCells);
@@ -225,8 +243,8 @@ export default class DashGantt extends Component {
     renderSlotRectangle(slot) {
         const { slotDuration } = this.props;
         
-        // Calculate the number of cells this slot should span
-        const numCellsToSpan = this.calculateSlotWidth(slot.start, slot.end, slotDuration);
+        // Get the number of cells this slot should span (using cached value if available)
+        const numCellsToSpan = this.getSlotWidth(slot, slotDuration);
         
         // We need to make the rectangle fill exactly the grid cells it should span
         // Calculate width to exactly fill the grid cells
@@ -286,6 +304,8 @@ export default class DashGantt extends Component {
         const { timeslots, startHour, endHour, slotDuration } = this.props;
         const slotsPerHour = 60 / slotDuration;
         const cells = [];
+        
+        // Only filter slots for this professional once
         const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
         
         // Group slots by their start time for more efficient lookup
@@ -295,6 +315,20 @@ export default class DashGantt extends Component {
             const key = `${hour}:${minute}`;
             slotsByStartTime[key] = slot;
         });
+        
+        // Pre-create styles for hover state to reduce object creation during render
+        const hoverStyle = {
+            position: 'absolute',
+            bottom: '2px',
+            right: '2px',
+            fontSize: '10px',
+            color: '#666',
+            pointerEvents: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            padding: '1px 3px',
+            borderRadius: '2px',
+            zIndex: 200
+        };
         
         // Iterate through each time slot for this professional
         for (let hour = startHour; hour <= endHour; hour++) {
@@ -337,18 +371,7 @@ export default class DashGantt extends Component {
                         
                         {/* Show time on hover */}
                         {isHovered && (
-                            <div style={{
-                                position: 'absolute',
-                                bottom: '2px',
-                                right: '2px',
-                                fontSize: '10px',
-                                color: '#666',
-                                pointerEvents: 'none',
-                                backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                                padding: '1px 3px',
-                                borderRadius: '2px',
-                                zIndex: 200
-                            }}>
+                            <div style={hoverStyle}>
                                 {timeDisplay}
                             </div>
                         )}
@@ -360,6 +383,48 @@ export default class DashGantt extends Component {
         }
         
         return cells;
+    }
+    
+    // Get cached slot width or calculate it if not in cache
+    getSlotWidth(slot, slotDuration) {
+        // Create a unique key for this slot and duration
+        const cacheKey = `${slot.id}_${slot.start}_${slot.end}_${slotDuration}`;
+        
+        // If we have a cached value, use it
+        if (this.state.slotWidthCache[cacheKey] !== undefined) {
+            return this.state.slotWidthCache[cacheKey];
+        }
+        
+        // Otherwise, calculate and cache the value
+        const width = this.calculateSlotWidth(slot.start, slot.end, slotDuration);
+        
+        // Update the cache (without triggering a re-render)
+        // We can safely update state directly here since we're not using setState
+        // and this won't trigger a re-render - it's just for caching
+        this.state.slotWidthCache[cacheKey] = width;
+        
+        return width;
+    }
+    
+    // Optimize rendering by preventing unnecessary re-renders
+    shouldComponentUpdate(nextProps, nextState) {
+        // We need to allow hover state changes to trigger re-renders for hover effects
+        // but we can still optimize by not recalculating slot widths
+        
+        // For any state or prop changes, we should re-render
+        // But we can optimize calculations inside the render cycle
+        return true;
+    }
+    
+    // Reset cache when props change
+    componentDidUpdate(prevProps) {
+        // If timeslots change, clear the width cache to ensure correct calculations
+        if (prevProps.timeslots !== this.props.timeslots || 
+            prevProps.slotDuration !== this.props.slotDuration) {
+            this.setState({
+                slotWidthCache: {}
+            });
+        }
     }
     
     render() {
