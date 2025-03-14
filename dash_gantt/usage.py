@@ -10,13 +10,14 @@ professionals = [
     {"id": 3, "name": "Bob Johnson"}
 ]
 
+# Sample timeslots using the date from the screenshot
 timeslots = [
     {
         "id": 1,
         "professionalId": 1,
         "start": "09:00",
         "end": "10:00",
-        "date": "2023-03-13",
+        "date": "2025-03-14",
         "bookingProbability": 0.75
     },
     {
@@ -24,7 +25,7 @@ timeslots = [
         "professionalId": 1,
         "start": "14:00",
         "end": "15:00",
-        "date": "2023-03-13",
+        "date": "2025-03-14",
         "bookingProbability": 0.45
     },
     {
@@ -32,7 +33,7 @@ timeslots = [
         "professionalId": 2,
         "start": "10:00",
         "end": "11:00",
-        "date": "2023-03-13",
+        "date": "2025-03-14",
         "bookingProbability": 0.90
     }
 ]
@@ -46,7 +47,7 @@ app.layout = html.Div([
         html.Label("Select Date:"),
         dcc.DatePickerSingle(
             id='date-picker',
-            date=datetime.now().date(),
+            date="2025-03-14",
             display_format='YYYY-MM-DD'
         )
     ], style={'margin-bottom': '20px'}),
@@ -55,10 +56,10 @@ app.layout = html.Div([
         id='gantt-chart',
         professionals=professionals,
         timeslots=timeslots,
-        date=datetime.now().strftime('%Y-%m-%d'),
-        startHour=8,
-        endHour=18,
-        slotDuration=60
+        date="2025-03-14",
+        startHour=6,
+        endHour=24,
+        slotDuration=5
     ),
     
     html.Div([

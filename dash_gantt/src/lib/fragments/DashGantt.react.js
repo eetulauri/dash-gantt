@@ -25,11 +25,13 @@ export default class DashGantt extends Component {
         // Bind methods
         this.handleSlotClick = this.handleSlotClick.bind(this);
         this.handleAddSlot = this.handleAddSlot.bind(this);
+        this.handleCreateSlot = this.handleCreateSlot.bind(this);
         this.handleRemoveSlot = this.handleRemoveSlot.bind(this);
         this.handleSaveSlot = this.handleSaveSlot.bind(this);
         this.handleCancelEdit = this.handleCancelEdit.bind(this);
         this.handleCellHover = this.handleCellHover.bind(this);
         this.handleCellLeave = this.handleCellLeave.bind(this);
+        this.renderSlotRectangle = this.renderSlotRectangle.bind(this);
     }
     
     // Handle clicking on a timeslot
@@ -52,6 +54,38 @@ export default class DashGantt extends Component {
         this.setState({
             hoveredCell: null
         });
+    }
+    
+    // Handle creating a new timeslot with a single click
+    handleCreateSlot(professionalId, hour, minute) {
+        const { timeslots, date, setProps } = this.props;
+        
+        // Calculate start and end times
+        const startHour = Math.floor(hour);
+        const startMinutes = minute;
+        const startTime = `${startHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
+        
+        // Always create a 20-minute slot regardless of slotDuration prop
+        const slotDurationMinutes = 20; // Fixed 20-minute duration for created slots
+        const endTimeInMinutes = startHour * 60 + startMinutes + slotDurationMinutes;
+        const endHour = Math.floor(endTimeInMinutes / 60);
+        const endMinutes = endTimeInMinutes % 60;
+        const endTime = `${endHour.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+        
+        // Create new slot
+        const newId = timeslots.length > 0 ? Math.max(...timeslots.map(slot => slot.id)) + 1 : 1;
+        const slotToAdd = {
+            id: newId,
+            professionalId: professionalId,
+            start: startTime,
+            end: endTime,
+            date: date,
+            bookingProbability: 0.5 // Default probability, can be updated later by prediction model
+        };
+        
+        // Update timeslots
+        const updatedTimeslots = [...timeslots, slotToAdd];
+        setProps({ timeslots: updatedTimeslots });
     }
     
     // Handle adding a new timeslot
@@ -159,6 +193,81 @@ export default class DashGantt extends Component {
         return '#F44336'; // Red for low probability
     }
     
+    // Calculate the width of a slot as a percentage
+    calculateSlotWidth(slot) {
+        const { slotDuration, startHour, endHour } = this.props;
+        
+        // Calculate slot duration in minutes
+        const startDecimal = this.timeToDecimal(slot.start);
+        const endDecimal = this.timeToDecimal(slot.end);
+        const durationInHours = endDecimal - startDecimal;
+        const durationInMinutes = durationInHours * 60;
+        
+        // Calculate how many slotDuration intervals this covers
+        const slotCount = durationInMinutes / slotDuration;
+        
+        // Calculate total number of slots in the entire row
+        const totalHours = endHour - startHour;
+        const totalSlots = totalHours * (60 / slotDuration);
+        
+        // Return the percentage width relative to the entire row
+        return (slotCount / totalSlots) * 100;
+    }
+    
+    // Render a single slot rectangle
+    renderSlotRectangle(slot) {
+        const { slotDuration } = this.props;
+        
+        // Calculate slot duration in minutes
+        const slotStart = this.timeToDecimal(slot.start);
+        const slotEnd = this.timeToDecimal(slot.end);
+        const durationInHours = slotEnd - slotStart;
+        const durationInMinutes = durationInHours * 60;
+        
+        // Calculate how many 5-minute slots this covers
+        const slotCount = durationInMinutes / slotDuration;
+        
+        const slotStyle = {
+            position: 'absolute',
+            top: '0',
+            height: '100%',
+            backgroundColor: this.getProbabilityColor(slot.bookingProbability),
+            color: 'white',
+            borderRadius: '4px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            zIndex: 10,
+            overflow: 'hidden',
+            width: `calc(${slotCount * 100}%)`, // Each cell is 100% wide, so multiply by slotCount
+            left: 0
+        };
+        
+        const probabilityStyle = {
+            fontSize: '14px',
+            fontWeight: 'bold'
+        };
+        
+        return (
+            <div 
+                key={`slot-${slot.id}`} 
+                style={slotStyle}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    this.handleSlotClick(slot);
+                }}
+            >
+                {slot.bookingProbability !== undefined && (
+                    <div style={probabilityStyle}>
+                        {Math.round(slot.bookingProbability * 100)}%
+                    </div>
+                )}
+            </div>
+        );
+    }
+    
     render() {
         const { id, professionals, date, timeslots, startHour, endHour, slotDuration } = this.props;
         
@@ -217,14 +326,12 @@ export default class DashGantt extends Component {
                 borderBottom: '1px solid #ccc',
                 cursor: 'pointer',
                 height: '60px',
-                width: `${100 / (slotsPerHour * (endHour - startHour + 1))}%`
+                width: `${100 / (slotsPerHour * (endHour - startHour))}%`
             },
             dashGanttSlot: {
                 position: 'absolute',
                 top: '0',
-                left: '0',
                 height: '100%',
-                width: '100%',
                 backgroundColor: '#4CAF50',
                 color: 'white',
                 borderRadius: '4px',
@@ -233,7 +340,8 @@ export default class DashGantt extends Component {
                 alignItems: 'center',
                 cursor: 'pointer',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                zIndex: 10
+                zIndex: 10,
+                overflow: 'hidden'
             },
             dashGanttProbability: {
                 fontSize: '14px',
@@ -305,25 +413,24 @@ export default class DashGantt extends Component {
             const cells = [];
             const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
             
+            // Iterate through each time slot for this professional
             for (let hour = startHour; hour <= endHour; hour++) {
                 for (let minuteIndex = 0; minuteIndex < slotsPerHour; minuteIndex++) {
                     const minute = minuteIndex * slotDuration;
                     const timeKey = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                     
-                    // Check if there's a slot that starts at this exact time
-                    const matchingSlot = professionalSlots.find(slot => {
+                    // Determine if the current cell is the start of a time slot
+                    const startingSlot = professionalSlots.find(slot => {
                         const [slotHour, slotMinute] = slot.start.split(':').map(Number);
                         return slotHour === hour && slotMinute === minute;
                     });
                     
-                    // Check if this time is within any slot's range
+                    // Determine if the current cell is inside any existing time slot
+                    const cellTime = hour + (minute / 60);
                     const isWithinSlot = professionalSlots.find(slot => {
                         const slotStart = this.timeToDecimal(slot.start);
                         const slotEnd = this.timeToDecimal(slot.end);
-                        const currentTime = hour + (minute / 60);
-                        
-                        // Check if current time is within the slot's range
-                        return currentTime >= slotStart && currentTime < slotEnd;
+                        return cellTime >= slotStart && cellTime < slotEnd;
                     });
                     
                     const isHovered = this.state.hoveredCell && 
@@ -331,53 +438,31 @@ export default class DashGantt extends Component {
                                     this.state.hoveredCell.hour === hour &&
                                     this.state.hoveredCell.minute === minute;
                     
-                    cells.push(
+                    // Create the cell for this time slot
+                    const cell = (
                         <td 
                             key={`cell-${professional.id}-${timeKey}`} 
                             style={{
                                 ...styles.dashGanttTimeCell,
                                 backgroundColor: isHovered ? '#f0f0f0' : 'transparent',
-                                borderLeft: minute === 0 ? '1px solid #ccc' : 'none'
+                                borderLeft: minute === 0 ? '1px solid #ccc' : 'none',
+                                position: 'relative'
                             }}
-                            onClick={() => this.handleAddSlot(professional.id, hour, minute)}
+                            onClick={() => this.handleCreateSlot(professional.id, hour, minute)}
                             onMouseEnter={() => this.handleCellHover(professional.id, hour, minute)}
                             onMouseLeave={this.handleCellLeave}
                         >
-                            {matchingSlot && (
-                                <div 
-                                    key={`slot-${matchingSlot.id}`} 
-                                    style={{
-                                        ...styles.dashGanttSlot,
-                                        backgroundColor: this.getProbabilityColor(matchingSlot.bookingProbability)
-                                    }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        this.handleSlotClick(matchingSlot);
-                                    }}
-                                >
-                                    {matchingSlot.bookingProbability !== undefined && (
-                                        <div style={styles.dashGanttProbability}>
-                                            {Math.round(matchingSlot.bookingProbability * 100)}%
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            {!matchingSlot && isWithinSlot && (
-                                <div 
-                                    style={{
-                                        ...styles.dashGanttSlot,
-                                        backgroundColor: this.getProbabilityColor(isWithinSlot.bookingProbability)
-                                    }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        this.handleSlotClick(isWithinSlot);
-                                    }}
-                                >
-                                    {/* No content for continuation cells */}
-                                </div>
+                            {/* Render slot only if this is the starting cell */}
+                            {startingSlot && this.renderSlotRectangle(startingSlot)}
+                            
+                            {/* If we're inside a slot but not at the start, render empty space */}
+                            {!startingSlot && isWithinSlot && (
+                                <div style={{ height: '100%' }}></div>
                             )}
                         </td>
                     );
+                    
+                    cells.push(cell);
                 }
             }
             
@@ -407,7 +492,7 @@ export default class DashGantt extends Component {
             
             return cells;
         };
-        
+
         return (
             <div id={id} style={styles.dashGantt}>
                 <div style={styles.dashGanttHeader}>

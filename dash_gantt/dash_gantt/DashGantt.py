@@ -22,7 +22,7 @@ Keyword arguments:
     The end hour of the day (e.g., 24 for midnight).
 
 - professionals (list of dicts; required):
-    List of professionals to display in the Gantt chart.  Each
+    List of professionals to display in the Gantt chart. Each
     professional should have an id and name.
 
     `professionals` is a list of dicts with keys:
@@ -38,7 +38,7 @@ Keyword arguments:
     The start hour of the day (e.g., 6 for 6:00 AM).
 
 - timeslots (list of dicts; optional):
-    List of timeslots to display in the Gantt chart.  Each timeslot
+    List of timeslots to display in the Gantt chart. Each timeslot
     should have an id, professionalId, start time, end time, and date.
 
     `timeslots` is a list of dicts with keys:

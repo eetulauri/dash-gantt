@@ -6,7 +6,7 @@
 \title{DashGantt component}
 
 \description{
-DashGantt is a Gantt chart component for scheduling. It displays professionals vertically and time horizontally. Users can add, modify, and remove timeslots for each professional. The component outputs data that can be used in a prediction model.
+DashGantt is a Gantt chart component for scheduling. It displays professionals vertically and time horizontally. Users can add, modify, and remove timeslots for each professional. The component outputs data that can be used in a prediction model.
 }
 
 \usage{
@@ -24,7 +24,7 @@ slotDuration=NULL, startHour=NULL, timeslots=NULL)
 \item{professionals}{List of lists containing elements 'id', 'name'.
 those elements have the following types:
   - id (numeric; required)
-  - name (character; required)s. List of professionals to display in the Gantt chart.
+  - name (character; required)s. List of professionals to display in the Gantt chart.
 Each professional should have an id and name.}
 
 \item{slotDuration}{Numeric. The duration of each slot in minutes.}
@@ -38,7 +38,7 @@ those elements have the following types:
   - start (character; required)
   - end (character; required)
   - date (character; required)
-  - bookingprobability (numeric; optional)s. List of timeslots to display in the Gantt chart.
+  - bookingprobability (numeric; optional)s. List of timeslots to display in the Gantt chart.
 Each timeslot should have an id, professionalId, start time, end time, and date.}
 }
 
