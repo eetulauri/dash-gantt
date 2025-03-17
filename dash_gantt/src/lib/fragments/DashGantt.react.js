@@ -85,7 +85,7 @@ export default class DashGantt extends Component {
         const startMinutes = minute;
         const startTime = `${startHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
         
-        // Always create a 20-minute slot regardless of slotDuration prop
+        // Always create a 20-minute slot as per business requirements
         const slotDurationMinutes = 20; // Fixed 20-minute duration for created slots
         
         // Calculate end time, ensuring exact 20-minute duration
@@ -230,24 +230,29 @@ export default class DashGantt extends Component {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
     
-    // Get color based on booking probability using a continuous gradient
+    // Get color based on booking probability using a continuous gradient with yellow in the middle
     getProbabilityColor(probability) {
         if (probability === undefined) return '#4CAF50'; // Default green
         
         // Clamp probability between 0 and 1 for safety
         const p = Math.max(0, Math.min(1, probability));
         
-        // RGB values for red (low probability) to green (high probability)
-        // Red component: decreases as probability increases
-        const r = Math.round(255 * (1 - p));
+        let r, g, b;
         
-        // Green component: increases as probability increases
-        const g = Math.round(255 * p);
+        // For the first half (0 to 0.5), transition from red to yellow
+        // For the second half (0.5 to 1), transition from yellow to green
+        if (p < 0.5) {
+            // Red to Yellow: Red stays at 255, Green increases
+            r = 255;
+            g = Math.round(255 * (p * 2)); // *2 to reach 255 at p=0.5
+            b = 0;
+        } else {
+            // Yellow to Green: Green stays at 255, Red decreases
+            r = Math.round(255 * (1 - (p - 0.5) * 2)); // -0.5 and *2 to start from 255 and reach 0 at p=1
+            g = 255;
+            b = 0;
+        }
         
-        // Blue component: keep low for red-to-green spectrum
-        const b = 0;
-        
-        // Convert to hex color
         return `rgb(${r}, ${g}, ${b})`;
     }
     
@@ -283,12 +288,6 @@ export default class DashGantt extends Component {
             transition: 'all 0.15s ease-in-out'
         };
         
-        const probabilityStyle = {
-            fontSize: '14px',
-            fontWeight: '500', // Medium weight for cleaner look
-            textShadow: '0 1px 1px rgba(0,0,0,0.2)' // Subtle text shadow for legibility
-        };
-        
         return (
             <div 
                 key={`slot-${slot.id}`} 
@@ -299,11 +298,7 @@ export default class DashGantt extends Component {
                 }}
                 title={`Time slot: ${slot.start} - ${slot.end} (Booking probability: ${Math.round(slot.bookingProbability * 100)}%)`}
             >
-                {slot.bookingProbability !== undefined && (
-                    <div style={probabilityStyle}>
-                        {Math.round(slot.bookingProbability * 100)}%
-                    </div>
-                )}
+                {/* Removed percentage display for cleaner look */}
             </div>
         );
     }
@@ -456,11 +451,15 @@ export default class DashGantt extends Component {
     render() {
         const { id, professionals, date, timeslots, startHour, endHour, slotDuration } = this.props;
         
-        // Calculate number of time slots per hour (e.g., 3 for 20-minute slots)
+        // Calculate number of time slots per hour (e.g., 12 for 5-minute slots)
         const slotsPerHour = 60 / slotDuration;
         
         // Calculate total number of slots in the timeline
         const totalSlots = (endHour - startHour) * slotsPerHour;
+        
+        // Calculate a reasonable cell width in pixels - each hour should be at least 60px wide
+        const hourWidth = 60;
+        const cellWidth = hourWidth / slotsPerHour;
         
         const styles = {
             dashGantt: {
@@ -480,7 +479,9 @@ export default class DashGantt extends Component {
             dashGanttTable: {
                 width: '100%',
                 borderCollapse: 'collapse',
-                tableLayout: 'fixed'
+                tableLayout: 'fixed',
+                // Each hour is at least hourWidth pixels, plus professional column
+                minWidth: `${150 + (endHour - startHour) * hourWidth}px`
             },
             dashGanttHeaderRow: {
                 backgroundColor: this.props.backgroundColor || '#ffffff' // White background like simple_white theme
@@ -520,6 +521,8 @@ export default class DashGantt extends Component {
                 borderBottom: '1px solid #eaeaea',
                 cursor: 'pointer',
                 height: '60px',
+                // We're setting a minimum width based on a reasonable cell size
+                minWidth: '5px', 
                 width: `${100 / totalSlots}%`,
                 boxSizing: 'border-box',
                 transition: 'background-color 0.2s ease'
@@ -752,7 +755,7 @@ DashGantt.defaultProps = {
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
-    slotDuration: 20, // 20 minutes
+    slotDuration: 20, // 20 minutes as per business requirements
     backgroundColor: '#f5f5f5' // Default background color
 };
 

@@ -69,7 +69,7 @@ app.layout = html.Div([
         date="2025-03-14",
         startHour=6,
         endHour=24,
-        slotDuration=5,
+        slotDuration=5,  # 5-minute slots as per business requirements
         backgroundColor='#ffffff'  # White background to match simple_white theme
     ),
     
