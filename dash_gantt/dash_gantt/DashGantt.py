@@ -15,6 +15,9 @@ Keyword arguments:
 - id (string; optional):
     The ID used to identify this component in Dash callbacks.
 
+- backgroundColor (string; default '#f5f5f5'):
+    The background color for the header row.
+
 - date (string; default new Date().toISOString().split('T')[0]):
     The date to display in the Gantt chart (YYYY-MM-DD).
 
@@ -59,10 +62,10 @@ Keyword arguments:
     _namespace = 'dash_gantt'
     _type = 'DashGantt'
     @_explicitize_args
-    def __init__(self, id=Component.UNDEFINED, professionals=Component.REQUIRED, timeslots=Component.UNDEFINED, date=Component.UNDEFINED, startHour=Component.UNDEFINED, endHour=Component.UNDEFINED, slotDuration=Component.UNDEFINED, **kwargs):
-        self._prop_names = ['id', 'date', 'endHour', 'professionals', 'slotDuration', 'startHour', 'timeslots']
+    def __init__(self, id=Component.UNDEFINED, professionals=Component.REQUIRED, timeslots=Component.UNDEFINED, date=Component.UNDEFINED, startHour=Component.UNDEFINED, endHour=Component.UNDEFINED, slotDuration=Component.UNDEFINED, backgroundColor=Component.UNDEFINED, **kwargs):
+        self._prop_names = ['id', 'backgroundColor', 'date', 'endHour', 'professionals', 'slotDuration', 'startHour', 'timeslots']
         self._valid_wildcard_attributes =            []
-        self.available_properties = ['id', 'date', 'endHour', 'professionals', 'slotDuration', 'startHour', 'timeslots']
+        self.available_properties = ['id', 'backgroundColor', 'date', 'endHour', 'professionals', 'slotDuration', 'startHour', 'timeslots']
         self.available_wildcard_properties =            []
         _explicit_args = kwargs.pop('_explicit_args')
         _locals = locals()

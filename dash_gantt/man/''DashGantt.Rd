@@ -10,12 +10,15 @@ DashGantt is a Gantt chart component for scheduling. It displays professionals v
 }
 
 \usage{
-''DashGantt(id=NULL, date=NULL, endHour=NULL, professionals=NULL,
-slotDuration=NULL, startHour=NULL, timeslots=NULL)
+''DashGantt(id=NULL, backgroundColor=NULL, date=NULL, endHour=NULL,
+professionals=NULL, slotDuration=NULL, startHour=NULL,
+timeslots=NULL)
 }
 
 \arguments{
 \item{id}{Character. The ID used to identify this component in Dash callbacks.}
+
+\item{backgroundColor}{Character. The background color for the header row.}
 
 \item{date}{Character. The date to display in the Gantt chart (YYYY-MM-DD).}
 

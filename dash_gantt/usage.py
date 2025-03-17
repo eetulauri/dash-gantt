@@ -35,22 +35,32 @@ timeslots = [
         "end": "11:00",
         "date": "2025-03-14",
         "bookingProbability": 0.90
+    },
+    {
+        "id": 4,
+        "professionalId": 3,
+        "start": "09:30",
+        "end": "10:00",
+        "date": "2025-03-14",
+        "bookingProbability": 0.50
     }
 ]
 
 app = Dash(__name__)
 
+# Apply styles matching Plotly's simple_white theme
 app.layout = html.Div([
-    html.H1("Scheduling Tool with Booking Predictions"),
+    html.H1("Scheduling Tool with Booking Predictions", 
+            style={'color': '#444', 'fontWeight': '400', 'marginBottom': '25px'}),
     
     html.Div([
-        html.Label("Select Date:"),
+        html.Label("Select Date:", style={'color': '#444', 'marginRight': '10px', 'fontSize': '14px'}),
         dcc.DatePickerSingle(
             id='date-picker',
             date="2025-03-14",
             display_format='YYYY-MM-DD'
         )
-    ], style={'marginBottom': '20px'}),
+    ], style={'marginBottom': '20px', 'display': 'flex', 'alignItems': 'center'}),
     
     dash_gantt.DashGantt(
         id='gantt-chart',
@@ -59,19 +69,24 @@ app.layout = html.Div([
         date="2025-03-14",
         startHour=6,
         endHour=24,
-        slotDuration=5
+        slotDuration=5,
+        backgroundColor='#ffffff'  # White background to match simple_white theme
     ),
     
     html.Div([
-        html.H3("Timeslot Data (for Prediction Model)"),
+        html.H3("Timeslot Data (for Prediction Model)", 
+                style={'color': '#444', 'fontWeight': '400', 'marginBottom': '10px'}),
         html.Pre(id='timeslot-data', style={
-            'backgroundColor': '#f8f9fa',
+            'backgroundColor': '#fafafa',
             'padding': '15px',
-            'borderRadius': '5px',
-            'whiteSpace': 'pre-wrap'
+            'borderRadius': '4px',
+            'whiteSpace': 'pre-wrap',
+            'border': '1px solid #eaeaea',
+            'fontSize': '13px',
+            'color': '#333'
         })
     ], style={'marginTop': '30px'})
-])
+], style={'fontFamily': 'Arial, sans-serif', 'margin': '20px', 'maxWidth': '1200px', 'marginLeft': 'auto', 'marginRight': 'auto'})
 
 
 @callback(

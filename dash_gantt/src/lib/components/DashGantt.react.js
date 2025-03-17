@@ -22,6 +22,7 @@ DashGantt.defaultProps = {
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
     slotDuration: 20, // 20 minutes
+    backgroundColor: '#f5f5f5' // Default background color
 };
 
 DashGantt.propTypes = {
@@ -75,6 +76,11 @@ DashGantt.propTypes = {
      * The duration of each slot in minutes.
      */
     slotDuration: PropTypes.number,
+
+    /**
+     * The background color for the header row.
+     */
+    backgroundColor: PropTypes.string,
 
     /**
      * Dash-assigned callback that should be called to report property changes

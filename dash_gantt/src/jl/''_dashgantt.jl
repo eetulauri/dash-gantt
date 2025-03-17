@@ -12,6 +12,7 @@ Users can add, modify, and remove timeslots for each professional.
 The component outputs data that can be used in a prediction model.
 Keyword arguments:
 - `id` (String; optional): The ID used to identify this component in Dash callbacks.
+- `backgroundColor` (String; optional): The background color for the header row.
 - `date` (String; optional): The date to display in the Gantt chart (YYYY-MM-DD).
 - `endHour` (Real; optional): The end hour of the day (e.g., 24 for midnight).
 - `professionals` (required): List of professionals to display in the Gantt chart.
@@ -32,7 +33,7 @@ Those elements have the following types:
   - `bookingProbability` (Real; optional)s
 """
 function ''_dashgantt(; kwargs...)
-        available_props = Symbol[:id, :date, :endHour, :professionals, :slotDuration, :startHour, :timeslots]
+        available_props = Symbol[:id, :backgroundColor, :date, :endHour, :professionals, :slotDuration, :startHour, :timeslots]
         wild_props = Symbol[]
         return Component("''_dashgantt", "DashGantt", "dash_gantt", available_props, wild_props; kwargs...)
 end

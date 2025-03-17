@@ -230,13 +230,25 @@ export default class DashGantt extends Component {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
     
-    // Get color based on booking probability
+    // Get color based on booking probability using a continuous gradient
     getProbabilityColor(probability) {
         if (probability === undefined) return '#4CAF50'; // Default green
         
-        if (probability >= 0.7) return '#4CAF50'; // Green for high probability
-        if (probability >= 0.4) return '#FFC107'; // Yellow for medium probability
-        return '#F44336'; // Red for low probability
+        // Clamp probability between 0 and 1 for safety
+        const p = Math.max(0, Math.min(1, probability));
+        
+        // RGB values for red (low probability) to green (high probability)
+        // Red component: decreases as probability increases
+        const r = Math.round(255 * (1 - p));
+        
+        // Green component: increases as probability increases
+        const g = Math.round(255 * p);
+        
+        // Blue component: keep low for red-to-green spectrum
+        const b = 0;
+        
+        // Convert to hex color
+        return `rgb(${r}, ${g}, ${b})`;
     }
     
     // Render a single slot rectangle
@@ -250,9 +262,9 @@ export default class DashGantt extends Component {
         // Calculate width to exactly fill the grid cells
         const slotStyle = {
             position: 'absolute',
-            top: '2px',
+            top: '4px',
             left: '0',
-            height: 'calc(100% - 4px)',
+            height: 'calc(100% - 8px)',
             // For a consistent calculation that accounts for grid lines:
             // - Multiply by 100% to get the percentage width
             // - Add (numCells-1) pixels to account for the internal borders
@@ -261,18 +273,20 @@ export default class DashGantt extends Component {
             boxSizing: 'border-box',
             backgroundColor: this.getProbabilityColor(slot.bookingProbability),
             color: 'white',
-            borderRadius: '4px',
+            borderRadius: '3px', // Slightly less rounded for cleaner look
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             cursor: 'pointer',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            zIndex: 100
+            boxShadow: '0 1px 2px rgba(0,0,0,0.1)', // Lighter shadow for simple_white theme
+            zIndex: 100,
+            transition: 'all 0.15s ease-in-out'
         };
         
         const probabilityStyle = {
             fontSize: '14px',
-            fontWeight: 'bold'
+            fontWeight: '500', // Medium weight for cleaner look
+            textShadow: '0 1px 1px rgba(0,0,0,0.2)' // Subtle text shadow for legibility
         };
         
         return (
@@ -352,8 +366,8 @@ export default class DashGantt extends Component {
                 // Hour borders are thicker for better visual separation
                 const cellStyle = {
                     ...styles.dashGanttTimeCell,
-                    backgroundColor: isHovered ? '#f0f0f0' : 'transparent',
-                    borderLeft: minute === 0 ? '1px solid #ccc' : 'none',  // Only show left border at hour boundaries
+                    backgroundColor: isHovered ? '#fafafa' : 'transparent',
+                    borderLeft: minute === 0 ? '1px solid #eaeaea' : 'none',  // Only show left border at hour boundaries
                     position: 'relative'
                 };
                 
@@ -371,7 +385,19 @@ export default class DashGantt extends Component {
                         
                         {/* Show time on hover */}
                         {isHovered && (
-                            <div style={hoverStyle}>
+                            <div style={{
+                                position: 'absolute', 
+                                bottom: '2px', 
+                                right: '2px', 
+                                fontSize: '10px', 
+                                color: '#666', 
+                                pointerEvents: 'none',
+                                backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                                padding: '1px 3px', 
+                                borderRadius: '2px', 
+                                zIndex: 200,
+                                border: '1px solid #eaeaea'
+                            }}>
                                 {timeDisplay}
                             </div>
                         )}
@@ -445,10 +471,11 @@ export default class DashGantt extends Component {
                 marginBottom: '10px'
             },
             dashGanttContainer: {
-                border: '1px solid #ccc',
-                borderRadius: '4px',
+                border: '1px solid #e0e0e0', // Even lighter border for simple_white theme
+                borderRadius: '4px', // Less rounded corners for clean look
                 overflow: 'hidden',
-                overflowX: 'auto'
+                overflowX: 'auto',
+                boxShadow: 'none' // No shadow for minimalist look
             },
             dashGanttTable: {
                 width: '100%',
@@ -456,19 +483,21 @@ export default class DashGantt extends Component {
                 tableLayout: 'fixed'
             },
             dashGanttHeaderRow: {
-                backgroundColor: '#f5f5f5'
+                backgroundColor: this.props.backgroundColor || '#ffffff' // White background like simple_white theme
             },
             dashGanttHeaderCell: {
-                padding: '8px',
+                padding: '12px 8px', 
                 textAlign: 'center',
-                fontWeight: 'bold',
-                borderRight: '1px solid #ccc',
-                borderBottom: '1px solid #ccc'
+                fontWeight: '500', // Medium weight for cleaner look
+                borderRight: '1px solid #eaeaea', // Very light border
+                borderBottom: '1px solid #eaeaea',
+                fontSize: '14px',
+                color: '#444' // Darker text for better readability
             },
             dashGanttFirstHeaderCell: {
                 width: '150px',
-                borderRight: '1px solid #ccc',
-                borderBottom: '1px solid #ccc'
+                borderRight: '1px solid #eaeaea',
+                borderBottom: '1px solid #eaeaea'
             },
             dashGanttRow: {
                 height: '60px'
@@ -476,20 +505,24 @@ export default class DashGantt extends Component {
             dashGanttProfessionalCell: {
                 width: '150px',
                 padding: '8px',
-                borderRight: '1px solid #ccc',
-                borderBottom: '1px solid #ccc',
-                backgroundColor: '#f9f9f9',
-                verticalAlign: 'middle'
+                borderRight: '1px solid #eaeaea',
+                borderBottom: '1px solid #eaeaea',
+                backgroundColor: this.props.backgroundColor || '#ffffff', // Use same background color as headers
+                verticalAlign: 'middle',
+                fontWeight: '500',
+                fontSize: '14px',
+                color: '#444'
             },
             dashGanttTimeCell: {
                 position: 'relative',
                 padding: '0',
-                borderRight: '1px solid #eee',  // Consistent border for all cells
-                borderBottom: '1px solid #ccc',
+                borderRight: '1px solid #f5f5f5', // Very subtle grid lines
+                borderBottom: '1px solid #eaeaea',
                 cursor: 'pointer',
                 height: '60px',
-                width: `${100 / totalSlots}%`, // Equal width for each time slot
-                boxSizing: 'border-box' // Include borders in width calculation
+                width: `${100 / totalSlots}%`,
+                boxSizing: 'border-box',
+                transition: 'background-color 0.2s ease'
             },
             dashGanttSlot: {
                 position: 'absolute',
@@ -502,20 +535,20 @@ export default class DashGantt extends Component {
                 justifyContent: 'center',
                 alignItems: 'center',
                 cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)', // Lighter shadow for cleaner look
                 zIndex: 10,
                 overflow: 'hidden'
             },
             dashGanttProbability: {
                 fontSize: '14px',
-                fontWeight: 'bold'
+                fontWeight: '500'
             },
             dashGanttEditor: {
                 marginTop: '20px',
                 padding: '15px',
-                border: '1px solid #ccc',
+                border: '1px solid #eaeaea', // Lighter border for simple_white
                 borderRadius: '4px',
-                backgroundColor: '#f9f9f9'
+                backgroundColor: '#ffffff' // Pure white background
             },
             dashGanttForm: {
                 display: 'flex',
@@ -528,13 +561,16 @@ export default class DashGantt extends Component {
             },
             dashGanttFormGroupLabel: {
                 width: '100px',
-                marginRight: '10px'
+                marginRight: '10px',
+                color: '#444',
+                fontSize: '14px'
             },
             dashGanttFormGroupInput: {
                 flex: 1,
                 padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px'
+                border: '1px solid #eaeaea',
+                borderRadius: '4px',
+                fontSize: '14px'
             },
             dashGanttFormActions: {
                 display: 'flex',
@@ -546,14 +582,16 @@ export default class DashGantt extends Component {
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontWeight: 'bold'
+                fontWeight: '500',
+                fontSize: '14px'
             },
             dashGanttFormActionsSave: {
-                backgroundColor: '#4CAF50',
+                backgroundColor: '#2196F3', // Using blue for primary action
                 color: 'white'
             },
             dashGanttFormActionsCancel: {
-                backgroundColor: '#f5f5f5'
+                backgroundColor: '#f5f5f5',
+                color: '#333'
             },
             dashGanttFormActionsRemove: {
                 backgroundColor: '#f44336',
@@ -576,10 +614,11 @@ export default class DashGantt extends Component {
             const cells = [];
             
             for (let hour = startHour; hour <= endHour; hour++) {
-                const displayHour = hour % 24; // Handle 24-hour format
-                const isPM = displayHour >= 12;
-                const display12Hour = displayHour === 0 ? 12 : (displayHour > 12 ? displayHour - 12 : displayHour);
-                const timeLabel = `${display12Hour}${isPM ? 'PM' : 'AM'}`;
+                // Use 24-hour format (European style)
+                // Ensure we're not exceeding 24 hours (handle edge case for endHour=24)
+                const displayHour = hour === 24 ? 24 : hour % 24;
+                // Format as 2-digit hour (e.g., "06" instead of "6")
+                const timeLabel = `${displayHour.toString().padStart(2, '0')}:00`;
                 
                 cells.push(
                     <th 
@@ -714,6 +753,7 @@ DashGantt.defaultProps = {
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
     slotDuration: 20, // 20 minutes
+    backgroundColor: '#f5f5f5' // Default background color
 };
 
 DashGantt.propTypes = {
@@ -767,6 +807,11 @@ DashGantt.propTypes = {
      * The duration of each slot in minutes.
      */
     slotDuration: PropTypes.number,
+
+    /**
+     * The background color for the header row.
+     */
+    backgroundColor: PropTypes.string,
 
     /**
      * Dash-assigned callback that should be called to report property changes
