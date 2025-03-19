@@ -21,7 +21,7 @@ DashGantt.defaultProps = {
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
-    slotDuration: 20, // 20 minutes as per business requirements
+    slotDuration: 5, // 5 minutes as per business requirements
     backgroundColor: '#f5f5f5' // Default background color
 };
 
@@ -53,7 +53,10 @@ DashGantt.propTypes = {
             start: PropTypes.string.isRequired, // Format: "HH:MM"
             end: PropTypes.string.isRequired, // Format: "HH:MM"
             date: PropTypes.string.isRequired, // Format: "YYYY-MM-DD"
-            bookingProbability: PropTypes.number // Optional: probability of booking (0-1)
+            bookingProbability: PropTypes.number, // Optional: probability of booking (0-1)
+            isBooked: PropTypes.bool, // Whether the slot is already booked
+            appointmentType: PropTypes.string, // In-person or Remote
+            resource: PropTypes.string // Resource type
         })
     ),
 

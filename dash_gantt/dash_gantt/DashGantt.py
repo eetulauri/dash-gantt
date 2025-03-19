@@ -34,7 +34,7 @@ Keyword arguments:
 
     - name (string; required)
 
-- slotDuration (number; default 20):
+- slotDuration (number; default 5):
     The duration of each slot in minutes.
 
 - startHour (number; default 6):
@@ -56,7 +56,13 @@ Keyword arguments:
 
     - date (string; required)
 
-    - bookingProbability (number; optional)"""
+    - bookingProbability (number; optional)
+
+    - isBooked (boolean; optional)
+
+    - appointmentType (string; optional)
+
+    - resource (string; optional)"""
     _children_props = []
     _base_nodes = ['children']
     _namespace = 'dash_gantt'

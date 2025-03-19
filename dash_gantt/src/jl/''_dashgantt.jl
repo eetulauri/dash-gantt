@@ -23,14 +23,17 @@ Those elements have the following types:
 - `slotDuration` (Real; optional): The duration of each slot in minutes.
 - `startHour` (Real; optional): The start hour of the day (e.g., 6 for 6:00 AM).
 - `timeslots` (optional): List of timeslots to display in the Gantt chart.
-Each timeslot should have an id, professionalId, start time, end time, and date.. timeslots has the following type: Array of lists containing elements 'id', 'professionalId', 'start', 'end', 'date', 'bookingProbability'.
+Each timeslot should have an id, professionalId, start time, end time, and date.. timeslots has the following type: Array of lists containing elements 'id', 'professionalId', 'start', 'end', 'date', 'bookingProbability', 'isBooked', 'appointmentType', 'resource'.
 Those elements have the following types:
   - `id` (Real; required)
   - `professionalId` (Real; required)
   - `start` (String; required)
   - `end` (String; required)
   - `date` (String; required)
-  - `bookingProbability` (Real; optional)s
+  - `bookingProbability` (Real; optional)
+  - `isBooked` (Bool; optional)
+  - `appointmentType` (String; optional)
+  - `resource` (String; optional)s
 """
 function ''_dashgantt(; kwargs...)
         available_props = Symbol[:id, :backgroundColor, :date, :endHour, :professionals, :slotDuration, :startHour, :timeslots]

@@ -34,14 +34,17 @@ Each professional should have an id and name.}
 
 \item{startHour}{Numeric. The start hour of the day (e.g., 6 for 6:00 AM).}
 
-\item{timeslots}{List of lists containing elements 'id', 'professionalid', 'start', 'end', 'date', 'bookingprobability'.
+\item{timeslots}{List of lists containing elements 'id', 'professionalid', 'start', 'end', 'date', 'bookingprobability', 'isbooked', 'appointmenttype', 'resource'.
 those elements have the following types:
   - id (numeric; required)
   - professionalid (numeric; required)
   - start (character; required)
   - end (character; required)
   - date (character; required)
-  - bookingprobability (numeric; optional)s. List of timeslots to display in the Gantt chart.
+  - bookingprobability (numeric; optional)
+  - isbooked (logical; optional)
+  - appointmenttype (character; optional)
+  - resource (character; optional)s. List of timeslots to display in the Gantt chart.
 Each timeslot should have an id, professionalId, start time, end time, and date.}
 }
 

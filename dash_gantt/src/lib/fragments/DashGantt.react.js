@@ -230,8 +230,15 @@ export default class DashGantt extends Component {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
     
-    // Get color based on booking probability using a continuous gradient with yellow in the middle
-    getProbabilityColor(probability) {
+    // Get color based on booking probability and booking status
+    getProbabilityColor(slot) {
+        // If the slot is booked, use a dark blue color
+        if (slot.isBooked) {
+            return '#1a237e'; // Dark blue for booked slots
+        }
+        
+        // For unbooked slots, use probability-based colors
+        const probability = slot.bookingProbability;
         if (probability === undefined) return '#4CAF50'; // Default green
         
         // Clamp probability between 0 and 1 for safety
@@ -276,16 +283,17 @@ export default class DashGantt extends Component {
             width: `calc(${numCellsToSpan * 100}% + ${numCellsToSpan - 1}px)`,
             // Set box-sizing to border-box to include borders in element's dimensions
             boxSizing: 'border-box',
-            backgroundColor: this.getProbabilityColor(slot.bookingProbability),
+            backgroundColor: this.getProbabilityColor(slot),
             color: 'white',
             borderRadius: '3px', // Slightly less rounded for cleaner look
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            cursor: 'pointer',
+            cursor: slot.isBooked ? 'not-allowed' : 'pointer',
             boxShadow: '0 1px 2px rgba(0,0,0,0.1)', // Lighter shadow for simple_white theme
             zIndex: 100,
-            transition: 'all 0.15s ease-in-out'
+            transition: 'all 0.15s ease-in-out',
+            opacity: slot.isBooked ? 0.8 : 1
         };
         
         return (
@@ -294,11 +302,15 @@ export default class DashGantt extends Component {
                 style={slotStyle}
                 onClick={(e) => {
                     e.stopPropagation();
-                    this.handleSlotClick(slot);
+                    if (!slot.isBooked) {
+                        this.handleSlotClick(slot);
+                    }
                 }}
-                title={`Time slot: ${slot.start} - ${slot.end} (Booking probability: ${Math.round(slot.bookingProbability * 100)}%)`}
+                title={`Time slot: ${slot.start} - ${slot.end}
+Type: ${slot.appointmentType}
+Resource: ${slot.resource}
+${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.bookingProbability * 100)}%`}`}
             >
-                {/* Removed percentage display for cleaner look */}
             </div>
         );
     }
@@ -787,7 +799,10 @@ DashGantt.propTypes = {
             start: PropTypes.string.isRequired, // Format: "HH:MM"
             end: PropTypes.string.isRequired, // Format: "HH:MM"
             date: PropTypes.string.isRequired, // Format: "YYYY-MM-DD"
-            bookingProbability: PropTypes.number // Optional: probability of booking (0-1)
+            bookingProbability: PropTypes.number, // Optional: probability of booking (0-1)
+            isBooked: PropTypes.bool,
+            appointmentType: PropTypes.string,
+            resource: PropTypes.string
         })
     ),
 

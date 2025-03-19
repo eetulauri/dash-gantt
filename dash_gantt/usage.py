@@ -2,49 +2,56 @@ import dash_gantt
 from dash import Dash, callback, html, Input, Output, State, dcc
 import json
 from datetime import datetime
+import pandas as pd
+import numpy as np
 
-# Sample data
-professionals = [
-    {"id": 1, "name": "John Doe"},
-    {"id": 2, "name": "Jane Smith"},
-    {"id": 3, "name": "Bob Johnson"}
-]
+# Function to transform CSV data into Gantt chart format
+def transform_csv_to_gantt_data(df, date):
+    # Filter data for the specific date
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['date'] = df['datetime'].dt.date.astype(str)
+    df_filtered = df[df['date'] == date]
+    
+    # Create professionals list from unique doctors
+    professionals = [
+        {"id": idx + 1, "name": doctor}
+        for idx, doctor in enumerate(df_filtered['laakari'].unique())
+    ]
+    
+    # Create doctor to id mapping
+    doctor_to_id = {doctor: idx + 1 for idx, doctor in enumerate(df_filtered['laakari'].unique())}
+    
+    # Transform timeslots
+    timeslots = []
+    for _, row in df_filtered.iterrows():
+        start_time = row['datetime'].strftime('%H:%M')
+        
+        # Calculate end time based on duration
+        end_datetime = row['datetime'] + pd.Timedelta(minutes=row['kesto_min'])
+        end_time = end_datetime.strftime('%H:%M')
+        
+        # Create timeslot entry
+        timeslot = {
+            "id": len(timeslots) + 1,
+            "professionalId": doctor_to_id[row['laakari']],
+            "start": start_time,
+            "end": end_time,
+            "date": date,
+            "bookingProbability": 0.5,  # Default probability, will be updated by prediction model
+            "isBooked": row['tyhja'] == 0,  # True if slot is booked
+            "appointmentType": row['aikaryhman'],  # In-person or Remote
+            "resource": row['RESURSSI']
+        }
+        timeslots.append(timeslot)
+    
+    return professionals, timeslots
 
-# Sample timeslots using the date from the screenshot
-timeslots = [
-    {
-        "id": 1,
-        "professionalId": 1,
-        "start": "09:00",
-        "end": "10:00",
-        "date": "2025-03-14",
-        "bookingProbability": 0.75
-    },
-    {
-        "id": 2,
-        "professionalId": 1,
-        "start": "14:00",
-        "end": "15:00",
-        "date": "2025-03-14",
-        "bookingProbability": 0.45
-    },
-    {
-        "id": 3,
-        "professionalId": 2,
-        "start": "10:00",
-        "end": "11:00",
-        "date": "2025-03-14",
-        "bookingProbability": 0.90
-    },
-    {
-        "id": 4,
-        "professionalId": 3,
-        "start": "09:30",
-        "end": "10:00",
-        "date": "2025-03-14",
-        "bookingProbability": 0.50
-    }
-]
+# Load and prepare data
+df = pd.read_csv('chatgpt-01.csv')
+df['datetime'] = pd.to_datetime(df['datetime'])  # Convert datetime column to datetime type
+
+# Get unique dates from the data
+available_dates = sorted(df['datetime'].dt.date.unique().astype(str))
 
 app = Dash(__name__)
 
@@ -57,20 +64,22 @@ app.layout = html.Div([
         html.Label("Select Date:", style={'color': '#444', 'marginRight': '10px', 'fontSize': '14px'}),
         dcc.DatePickerSingle(
             id='date-picker',
-            date="2025-03-14",
+            date=available_dates[0],  # Set default to first available date
+            min_date_allowed=available_dates[0],
+            max_date_allowed=available_dates[-1],
             display_format='YYYY-MM-DD'
         )
     ], style={'marginBottom': '20px', 'display': 'flex', 'alignItems': 'center'}),
     
     dash_gantt.DashGantt(
         id='gantt-chart',
-        professionals=professionals,
-        timeslots=timeslots,
-        date="2025-03-14",
+        professionals=[],  # Will be populated by callback
+        timeslots=[],     # Will be populated by callback
+        date=available_dates[0],
         startHour=6,
         endHour=24,
-        slotDuration=5,  # 5-minute slots as per business requirements
-        backgroundColor='#ffffff'  # White background to match simple_white theme
+        slotDuration=5,  # 5-minute slots
+        backgroundColor='#ffffff'
     ),
     
     html.Div([
@@ -88,18 +97,23 @@ app.layout = html.Div([
     ], style={'marginTop': '30px'})
 ], style={'fontFamily': 'Arial, sans-serif', 'margin': '20px', 'maxWidth': '1200px', 'marginLeft': 'auto', 'marginRight': 'auto'})
 
-
 @callback(
-    Output('timeslot-data', 'children'),
-    Input('gantt-chart', 'timeslots')
+    [Output('gantt-chart', 'professionals'),
+     Output('gantt-chart', 'timeslots'),
+     Output('timeslot-data', 'children')],
+    [Input('date-picker', 'date')]
 )
-def display_timeslot_data(timeslots):
-    if not timeslots:
-        return "No timeslots available."
+def update_gantt_data(selected_date):
+    if not selected_date:
+        return [], [], "No date selected."
     
-    # Format the timeslots data as JSON for display
-    return json.dumps(timeslots, indent=2)
-
+    # Transform CSV data for the selected date
+    professionals, timeslots = transform_csv_to_gantt_data(df, selected_date)
+    
+    # Format timeslots data for display
+    timeslots_display = json.dumps(timeslots, indent=2)
+    
+    return professionals, timeslots, timeslots_display
 
 @callback(
     Output('gantt-chart', 'date'),
@@ -107,7 +121,6 @@ def display_timeslot_data(timeslots):
 )
 def update_gantt_date(date):
     return date
-
 
 if __name__ == '__main__':
     app.run(debug=True)
