@@ -46,6 +46,8 @@ app.layout = html.Div([
     ),
     
     html.Div([
+        html.H3("Number of rows in data", style={'color': '#444', 'fontWeight': '400', 'marginBottom': '10px'}),
+        html.H3(id='num-rows', style={'color': '#444', 'fontWeight': '400', 'marginBottom': '10px'}),
         html.H3("Raw Data (for Prediction Model)", 
                 style={'color': '#444', 'fontWeight': '400', 'marginBottom': '10px'}),
         html.Pre(id='raw-data', style={
@@ -62,12 +64,13 @@ app.layout = html.Div([
 
 @callback(
     [Output('gantt-chart', 'rawData'),
-     Output('raw-data', 'children')],
+     Output('raw-data', 'children'),
+     Output('num-rows', 'children')],
     [Input('date-picker', 'date')]
 )
 def update_gantt_data(selected_date):
     if not selected_date:
-        return [], "No date selected."
+        return [], "No date selected.", "0"
     
     # Filter data for the selected date
     df['date'] = df['datetime'].dt.date.astype(str)
@@ -99,7 +102,31 @@ def update_gantt_data(selected_date):
     # Format raw data for display
     raw_data_display = json.dumps(raw_data, indent=2)
     
-    return raw_data, raw_data_display
+    return raw_data, raw_data_display, str(len(raw_data))
+
+# Add a new callback to handle updates from the Gantt chart component
+@callback(
+    [Output('raw-data', 'children', allow_duplicate=True),
+     Output('num-rows', 'children', allow_duplicate=True)],
+    [Input('gantt-chart', 'rawData')],
+    prevent_initial_call=True
+)
+def process_gantt_updates(updated_raw_data):
+    if not updated_raw_data:
+        return "No data available.", "0"
+    
+    # Print for debugging
+    print(f"Received update from Gantt chart - {len(updated_raw_data)} timeslots")
+    
+    # Here you could process the data for your prediction model
+    # For example:
+    # updated_df = pd.DataFrame(updated_raw_data)
+    # predictions = my_prediction_model.predict(updated_df)
+    
+    # Format raw data for display
+    raw_data_display = json.dumps(updated_raw_data, indent=2)
+    
+    return raw_data_display, str(len(updated_raw_data))
 
 @callback(
     Output('gantt-chart', 'date'),
