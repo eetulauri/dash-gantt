@@ -15,28 +15,28 @@ Keyword arguments:
 - `backgroundColor` (String; optional): The background color for the header row.
 - `date` (String; optional): The date to display in the Gantt chart (YYYY-MM-DD).
 - `endHour` (Real; optional): The end hour of the day (e.g., 24 for midnight).
-- `professionals` (required): List of professionals to display in the Gantt chart.
-Each professional should have an id and name.. professionals has the following type: Array of lists containing elements 'id', 'name'.
+- `rawData` (optional): Raw data from CSV/database in the format:
+[
+  {
+    datetime: string, // Format: "YYYY-MM-DD HH:MM"
+    laakari: string, // Doctor name
+    kesto_min: number, // Duration in minutes
+    tyhja: number, // 0 if booked, 1 if available
+    bookingProbability?: number, // Optional, defaults to 0.5 if not provided
+    // Additional fields are allowed and will be preserved
+  }
+]. rawData has the following type: Array of lists containing elements 'datetime', 'laakari', 'kesto_min', 'tyhja', 'bookingProbability'.
 Those elements have the following types:
-  - `id` (Real; required)
-  - `name` (String; required)s
+  - `datetime` (String; required)
+  - `laakari` (String; required)
+  - `kesto_min` (Real; required)
+  - `tyhja` (Real; required)
+  - `bookingProbability` (Real; optional)s
 - `slotDuration` (Real; optional): The duration of each slot in minutes.
 - `startHour` (Real; optional): The start hour of the day (e.g., 6 for 6:00 AM).
-- `timeslots` (optional): List of timeslots to display in the Gantt chart.
-Each timeslot should have an id, professionalId, start time, end time, and date.. timeslots has the following type: Array of lists containing elements 'id', 'professionalId', 'start', 'end', 'date', 'bookingProbability', 'isBooked', 'appointmentType', 'resource'.
-Those elements have the following types:
-  - `id` (Real; required)
-  - `professionalId` (Real; required)
-  - `start` (String; required)
-  - `end` (String; required)
-  - `date` (String; required)
-  - `bookingProbability` (Real; optional)
-  - `isBooked` (Bool; optional)
-  - `appointmentType` (String; optional)
-  - `resource` (String; optional)s
 """
 function ''_dashgantt(; kwargs...)
-        available_props = Symbol[:id, :backgroundColor, :date, :endHour, :professionals, :slotDuration, :startHour, :timeslots]
+        available_props = Symbol[:id, :backgroundColor, :date, :endHour, :rawData, :slotDuration, :startHour]
         wild_props = Symbol[]
         return Component("''_dashgantt", "DashGantt", "dash_gantt", available_props, wild_props; kwargs...)
 end

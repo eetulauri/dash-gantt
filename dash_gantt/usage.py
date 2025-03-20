@@ -5,50 +5,14 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
-# Function to transform CSV data into Gantt chart format
-def transform_csv_to_gantt_data(df, date):
-    # Filter data for the specific date
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['date'] = df['datetime'].dt.date.astype(str)
-    df_filtered = df[df['date'] == date]
-    
-    # Create professionals list from unique doctors
-    professionals = [
-        {"id": idx + 1, "name": doctor}
-        for idx, doctor in enumerate(df_filtered['laakari'].unique())
-    ]
-    
-    # Create doctor to id mapping
-    doctor_to_id = {doctor: idx + 1 for idx, doctor in enumerate(df_filtered['laakari'].unique())}
-    
-    # Transform timeslots
-    timeslots = []
-    for _, row in df_filtered.iterrows():
-        start_time = row['datetime'].strftime('%H:%M')
-        
-        # Calculate end time based on duration
-        end_datetime = row['datetime'] + pd.Timedelta(minutes=row['kesto_min'])
-        end_time = end_datetime.strftime('%H:%M')
-        
-        # Create timeslot entry
-        timeslot = {
-            "id": len(timeslots) + 1,
-            "professionalId": doctor_to_id[row['laakari']],
-            "start": start_time,
-            "end": end_time,
-            "date": date,
-            "bookingProbability": 0.5,  # Default probability, will be updated by prediction model
-            "isBooked": row['tyhja'] == 0,  # True if slot is booked
-            "appointmentType": row['aikaryhman'],  # In-person or Remote
-            "resource": row['RESURSSI']
-        }
-        timeslots.append(timeslot)
-    
-    return professionals, timeslots
-
 # Load and prepare data
 df = pd.read_csv('chatgpt-01.csv')
 df['datetime'] = pd.to_datetime(df['datetime'])  # Convert datetime column to datetime type
+
+# Print column names and first row for debugging
+print("Available columns:", df.columns.tolist())
+print("\nFirst row of data:")
+print(df.iloc[0])
 
 # Get unique dates from the data
 available_dates = sorted(df['datetime'].dt.date.unique().astype(str))
@@ -73,8 +37,7 @@ app.layout = html.Div([
     
     dash_gantt.DashGantt(
         id='gantt-chart',
-        professionals=[],  # Will be populated by callback
-        timeslots=[],     # Will be populated by callback
+        rawData=[],  # Will be populated by callback
         date=available_dates[0],
         startHour=6,
         endHour=24,
@@ -83,9 +46,9 @@ app.layout = html.Div([
     ),
     
     html.Div([
-        html.H3("Timeslot Data (for Prediction Model)", 
+        html.H3("Raw Data (for Prediction Model)", 
                 style={'color': '#444', 'fontWeight': '400', 'marginBottom': '10px'}),
-        html.Pre(id='timeslot-data', style={
+        html.Pre(id='raw-data', style={
             'backgroundColor': '#fafafa',
             'padding': '15px',
             'borderRadius': '4px',
@@ -98,22 +61,45 @@ app.layout = html.Div([
 ], style={'fontFamily': 'Arial, sans-serif', 'margin': '20px', 'maxWidth': '1200px', 'marginLeft': 'auto', 'marginRight': 'auto'})
 
 @callback(
-    [Output('gantt-chart', 'professionals'),
-     Output('gantt-chart', 'timeslots'),
-     Output('timeslot-data', 'children')],
+    [Output('gantt-chart', 'rawData'),
+     Output('raw-data', 'children')],
     [Input('date-picker', 'date')]
 )
 def update_gantt_data(selected_date):
     if not selected_date:
-        return [], [], "No date selected."
+        return [], "No date selected."
     
-    # Transform CSV data for the selected date
-    professionals, timeslots = transform_csv_to_gantt_data(df, selected_date)
+    # Filter data for the selected date
+    df['date'] = df['datetime'].dt.date.astype(str)
+    df_filtered = df[df['date'] == selected_date]
     
-    # Format timeslots data for display
-    timeslots_display = json.dumps(timeslots, indent=2)
+    # Convert filtered data to list of dictionaries and handle datetime serialization
+    raw_data = []
+    for _, row in df_filtered.iterrows():
+        try:
+            data_dict = {
+                'datetime': row['datetime'].strftime('%Y-%m-%d %H:%M'),
+                'toimipiste': str(row['toimipiste']),
+                'aikaryhman': str(row['aikaryhman']),
+                'aikaryhma': str(row['aikaryhma']),
+                'laakari': str(row['laakari']),
+                'RESURSSI': str(row['RESURSSI']),
+                'specialty': str(row['ETNS']),  # Changed from ETNS to specialty
+                'ETNS_A': int(row['ETNS_A']),
+                'kesto_min': int(row['kesto_min']),
+                'ETNS_B': int(row['ETNS_B']),
+                'tyhja': int(row['tyhja'])
+            }
+            raw_data.append(data_dict)
+        except Exception as e:
+            print(f"Error processing row: {row}")
+            print(f"Error details: {str(e)}")
+            continue
     
-    return professionals, timeslots, timeslots_display
+    # Format raw data for display
+    raw_data_display = json.dumps(raw_data, indent=2)
+    
+    return raw_data, raw_data_display
 
 @callback(
     Output('gantt-chart', 'date'),

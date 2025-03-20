@@ -24,63 +24,45 @@ Keyword arguments:
 - endHour (number; default 24):
     The end hour of the day (e.g., 24 for midnight).
 
-- professionals (list of dicts; required):
-    List of professionals to display in the Gantt chart. Each
-    professional should have an id and name.
+- rawData (list of dicts; optional):
+    Raw data from CSV/database in the format: [   {     datetime:
+    string, // Format: \"YYYY-MM-DD HH:MM\"     laakari: string, //
+    Doctor name     kesto_min: number, // Duration in minutes
+    tyhja: number, // 0 if booked, 1 if available
+    bookingProbability?: number, // Optional, defaults to 0.5 if not
+    provided     // Additional fields are allowed and will be
+    preserved   } ].
 
-    `professionals` is a list of dicts with keys:
+    `rawData` is a list of dicts with keys:
 
-    - id (number; required)
+    - datetime (string; required)
 
-    - name (string; required)
+    - laakari (string; required)
+
+    - kesto_min (number; required)
+
+    - tyhja (number; required)
+
+    - bookingProbability (number; optional)
 
 - slotDuration (number; default 5):
     The duration of each slot in minutes.
 
 - startHour (number; default 6):
-    The start hour of the day (e.g., 6 for 6:00 AM).
-
-- timeslots (list of dicts; optional):
-    List of timeslots to display in the Gantt chart. Each timeslot
-    should have an id, professionalId, start time, end time, and date.
-
-    `timeslots` is a list of dicts with keys:
-
-    - id (number; required)
-
-    - professionalId (number; required)
-
-    - start (string; required)
-
-    - end (string; required)
-
-    - date (string; required)
-
-    - bookingProbability (number; optional)
-
-    - isBooked (boolean; optional)
-
-    - appointmentType (string; optional)
-
-    - resource (string; optional)"""
+    The start hour of the day (e.g., 6 for 6:00 AM)."""
     _children_props = []
     _base_nodes = ['children']
     _namespace = 'dash_gantt'
     _type = 'DashGantt'
     @_explicitize_args
-    def __init__(self, id=Component.UNDEFINED, professionals=Component.REQUIRED, timeslots=Component.UNDEFINED, date=Component.UNDEFINED, startHour=Component.UNDEFINED, endHour=Component.UNDEFINED, slotDuration=Component.UNDEFINED, backgroundColor=Component.UNDEFINED, **kwargs):
-        self._prop_names = ['id', 'backgroundColor', 'date', 'endHour', 'professionals', 'slotDuration', 'startHour', 'timeslots']
+    def __init__(self, id=Component.UNDEFINED, rawData=Component.UNDEFINED, date=Component.UNDEFINED, startHour=Component.UNDEFINED, endHour=Component.UNDEFINED, slotDuration=Component.UNDEFINED, backgroundColor=Component.UNDEFINED, onDataChange=Component.UNDEFINED, **kwargs):
+        self._prop_names = ['id', 'backgroundColor', 'date', 'endHour', 'rawData', 'slotDuration', 'startHour']
         self._valid_wildcard_attributes =            []
-        self.available_properties = ['id', 'backgroundColor', 'date', 'endHour', 'professionals', 'slotDuration', 'startHour', 'timeslots']
+        self.available_properties = ['id', 'backgroundColor', 'date', 'endHour', 'rawData', 'slotDuration', 'startHour']
         self.available_wildcard_properties =            []
         _explicit_args = kwargs.pop('_explicit_args')
         _locals = locals()
         _locals.update(kwargs)  # For wildcard attrs and excess named props
         args = {k: _locals[k] for k in _explicit_args}
-
-        for k in ['professionals']:
-            if k not in args:
-                raise TypeError(
-                    'Required argument `' + k + '` was not specified.')
 
         super(DashGantt, self).__init__(**args)

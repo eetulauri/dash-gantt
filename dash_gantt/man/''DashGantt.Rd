@@ -11,8 +11,8 @@ DashGantt is a Gantt chart component for scheduling. It displays professionals v
 
 \usage{
 ''DashGantt(id=NULL, backgroundColor=NULL, date=NULL, endHour=NULL,
-professionals=NULL, slotDuration=NULL, startHour=NULL,
-timeslots=NULL)
+onDataChange=NULL, rawData=NULL, slotDuration=NULL,
+startHour=NULL)
 }
 
 \arguments{
@@ -24,28 +24,30 @@ timeslots=NULL)
 
 \item{endHour}{Numeric. The end hour of the day (e.g., 24 for midnight).}
 
-\item{professionals}{List of lists containing elements 'id', 'name'.
+\item{onDataChange}{Callback function that will be called when the data changes.
+The function will receive the updated raw data as its argument.}
+
+\item{rawData}{List of lists containing elements 'datetime', 'laakari', 'kesto_min', 'tyhja', 'bookingprobability'.
 those elements have the following types:
-  - id (numeric; required)
-  - name (character; required)s. List of professionals to display in the Gantt chart.
-Each professional should have an id and name.}
+  - datetime (character; required)
+  - laakari (character; required)
+  - kesto_min (numeric; required)
+  - tyhja (numeric; required)
+  - bookingprobability (numeric; optional)s. Raw data from CSV/database in the format:
+[
+  {
+    datetime: string, // Format: "YYYY-MM-DD HH:MM"
+    laakari: string, // Doctor name
+    kesto_min: number, // Duration in minutes
+    tyhja: number, // 0 if booked, 1 if available
+    bookingProbability?: number, // Optional, defaults to 0.5 if not provided
+    // Additional fields are allowed and will be preserved
+  }
+]}
 
 \item{slotDuration}{Numeric. The duration of each slot in minutes.}
 
 \item{startHour}{Numeric. The start hour of the day (e.g., 6 for 6:00 AM).}
-
-\item{timeslots}{List of lists containing elements 'id', 'professionalid', 'start', 'end', 'date', 'bookingprobability', 'isbooked', 'appointmenttype', 'resource'.
-those elements have the following types:
-  - id (numeric; required)
-  - professionalid (numeric; required)
-  - start (character; required)
-  - end (character; required)
-  - date (character; required)
-  - bookingprobability (numeric; optional)
-  - isbooked (logical; optional)
-  - appointmenttype (character; optional)
-  - resource (character; optional)s. List of timeslots to display in the Gantt chart.
-Each timeslot should have an id, professionalId, start time, end time, and date.}
 }
 
 \value{named list of JSON elements corresponding to React.js properties and their values}

@@ -17,12 +17,13 @@ const DashGantt = (props) => {
 };
 
 DashGantt.defaultProps = {
-    timeslots: [],
+    rawData: [], // Raw data from CSV/database
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     startHour: 6, // 6:00 AM
     endHour: 24, // Midnight
     slotDuration: 5, // 5 minutes as per business requirements
-    backgroundColor: '#f5f5f5' // Default background color
+    backgroundColor: '#f5f5f5', // Default background color
+    onDataChange: null // Callback for when data changes
 };
 
 DashGantt.propTypes = {
@@ -32,32 +33,26 @@ DashGantt.propTypes = {
     id: PropTypes.string,
 
     /**
-     * List of professionals to display in the Gantt chart.
-     * Each professional should have an id and name.
+     * Raw data from CSV/database in the format:
+     * [
+     *   {
+     *     datetime: string, // Format: "YYYY-MM-DD HH:MM"
+     *     laakari: string, // Doctor name
+     *     kesto_min: number, // Duration in minutes
+     *     tyhja: number, // 0 if booked, 1 if available
+     *     bookingProbability?: number, // Optional, defaults to 0.5 if not provided
+     *     // Additional fields are allowed and will be preserved
+     *   }
+     * ]
      */
-    professionals: PropTypes.arrayOf(
+    rawData: PropTypes.arrayOf(
         PropTypes.shape({
-            id: PropTypes.number.isRequired,
-            name: PropTypes.string.isRequired
-        })
-    ).isRequired,
-
-    /**
-     * List of timeslots to display in the Gantt chart.
-     * Each timeslot should have an id, professionalId, start time, end time, and date.
-     */
-    timeslots: PropTypes.arrayOf(
-        PropTypes.shape({
-            id: PropTypes.number.isRequired,
-            professionalId: PropTypes.number.isRequired,
-            start: PropTypes.string.isRequired, // Format: "HH:MM"
-            end: PropTypes.string.isRequired, // Format: "HH:MM"
-            date: PropTypes.string.isRequired, // Format: "YYYY-MM-DD"
-            bookingProbability: PropTypes.number, // Optional: probability of booking (0-1)
-            isBooked: PropTypes.bool, // Whether the slot is already booked
-            appointmentType: PropTypes.string, // In-person or Remote
-            resource: PropTypes.string // Resource type
-        })
+            datetime: PropTypes.string.isRequired,
+            laakari: PropTypes.string.isRequired,
+            kesto_min: PropTypes.number.isRequired,
+            tyhja: PropTypes.number.isRequired,
+            bookingProbability: PropTypes.number
+        }).isRequired
     ),
 
     /**
@@ -84,6 +79,12 @@ DashGantt.propTypes = {
      * The background color for the header row.
      */
     backgroundColor: PropTypes.string,
+
+    /**
+     * Callback function that will be called when the data changes.
+     * The function will receive the updated raw data as its argument.
+     */
+    onDataChange: PropTypes.func,
 
     /**
      * Dash-assigned callback that should be called to report property changes

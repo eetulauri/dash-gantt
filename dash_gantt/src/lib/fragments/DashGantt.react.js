@@ -11,6 +11,10 @@ export default class DashGantt extends Component {
     constructor(props) {
         super(props);
         
+        // Initialize state with props
+        const { rawData, date } = props;
+        const { professionals, timeslots } = DashGantt.transformData(rawData || [], date || new Date().toISOString().split('T')[0]);
+        
         this.state = {
             selectedSlot: null,
             isAddingSlot: false,
@@ -21,7 +25,12 @@ export default class DashGantt extends Component {
             },
             hoveredCell: null,
             // Cache for slot width calculations to avoid repeated calculations
-            slotWidthCache: {}
+            slotWidthCache: {},
+            // Internal state for transformed data
+            professionals: professionals || [],
+            timeslots: timeslots || [],
+            rawData: rawData || [],
+            date: date || new Date().toISOString().split('T')[0]
         };
         
         // Bind methods
@@ -39,6 +48,85 @@ export default class DashGantt extends Component {
         this.timeToDecimal = this.timeToDecimal.bind(this);
         this.calculateSlotWidth = this.calculateSlotWidth.bind(this);
         this.getSlotWidth = this.getSlotWidth.bind(this);
+        this.updateRawData = this.updateRawData.bind(this);
+    }
+    
+    // Transform raw data into component format
+    static transformData(rawData, date) {
+        if (!rawData || !date) return { professionals: [], timeslots: [] };
+
+        // Filter data for the specific date
+        const filteredData = rawData.filter(row => {
+            const rowDate = row.datetime.split(' ')[0];
+            return rowDate === date;
+        });
+
+        // Create professionals list from unique doctors
+        const professionals = Array.from(new Set(filteredData.map(row => row.laakari)))
+            .map((doctor, idx) => ({ id: idx + 1, name: doctor }));
+
+        // Create doctor to id mapping
+        const doctorToId = Object.fromEntries(
+            professionals.map((p, idx) => [p.name, idx + 1])
+        );
+
+        // Transform timeslots
+        const timeslots = filteredData.map((row, idx) => {
+            const [date, time] = row.datetime.split(' ');
+            const startTime = time;
+            
+            // Calculate end time based on duration
+            const [hours, minutes] = time.split(':').map(Number);
+            const startDate = new Date();
+            startDate.setHours(hours, minutes, 0);
+            // Use kesto_min directly from the data
+            const durationMinutes = row.kesto_min || 0;
+            const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+            const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+
+            return {
+                id: idx + 1,
+                professionalId: doctorToId[row.laakari],
+                start: startTime,
+                end: endTime,
+                date: date,
+                durationMinutes: durationMinutes, // Store the original duration
+                bookingProbability: row.bookingProbability || 0.5,
+                isBooked: row.tyhja === 0,
+                rawData: row // Keep reference to original data with all fields
+            };
+        });
+
+        return { professionals, timeslots };
+    }
+    
+    // Update getDerivedStateFromProps to handle undefined values
+    static getDerivedStateFromProps(nextProps, prevState) {
+        if (!nextProps) return null;
+        
+        const { rawData, date } = nextProps;
+        if (rawData !== prevState.rawData || date !== prevState.date) {
+            const { professionals, timeslots } = DashGantt.transformData(rawData || [], date || prevState.date);
+            return { 
+                professionals: professionals || [], 
+                timeslots: timeslots || [], 
+                rawData: rawData || [], 
+                date: date || prevState.date 
+            };
+        }
+        return null;
+    }
+
+    // Update componentDidMount to handle undefined values
+    componentDidMount() {
+        const { rawData, date } = this.props;
+        const { professionals, timeslots } = DashGantt.transformData(rawData || [], date || this.state.date);
+        this.setState({ 
+            professionals: professionals || [], 
+            timeslots: timeslots || [],
+            rawData: rawData || [],
+            date: date || this.state.date
+        });
     }
     
     // Handle clicking on a timeslot
@@ -78,7 +166,7 @@ export default class DashGantt extends Component {
     
     // Handle creating a new timeslot with a single click
     handleCreateSlot(professionalId, hour, minute) {
-        const { timeslots, date, setProps } = this.props;
+        const { timeslots, date } = this.state;
         
         // Calculate start and end times
         const startHour = Math.floor(hour);
@@ -86,10 +174,9 @@ export default class DashGantt extends Component {
         const startTime = `${startHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
         
         // Always create a 20-minute slot as per business requirements
-        const slotDurationMinutes = 20; // Fixed 20-minute duration for created slots
+        const slotDurationMinutes = 20;
         
-        // Calculate end time, ensuring exact 20-minute duration
-        // We use integer math to avoid floating-point precision issues
+        // Calculate end time
         const totalStartMinutes = (startHour * 60) + startMinutes;
         const totalEndMinutes = totalStartMinutes + slotDurationMinutes;
         const endHour = Math.floor(totalEndMinutes / 60);
@@ -104,12 +191,17 @@ export default class DashGantt extends Component {
             start: startTime,
             end: endTime,
             date: date,
-            bookingProbability: 0.5 // Default probability, can be updated later by prediction model
+            bookingProbability: 0.5,
+            isBooked: false,
+            appointmentType: 'In-person appointment',
+            resource: 'Default',
+            rawData: null // New slot has no original data
         };
         
-        // Update timeslots
+        // Update timeslots and raw data
         const updatedTimeslots = [...timeslots, slotToAdd];
-        setProps({ timeslots: updatedTimeslots });
+        this.setState({ timeslots: updatedTimeslots });
+        this.updateRawData(updatedTimeslots);
     }
     
     // Handle adding a new timeslot
@@ -137,16 +229,18 @@ export default class DashGantt extends Component {
     
     // Handle removing a timeslot
     handleRemoveSlot(slotId) {
-        const { timeslots, setProps } = this.props;
+        const { timeslots } = this.state;
         const updatedTimeslots = timeslots.filter(slot => slot.id !== slotId);
-        
-        setProps({ timeslots: updatedTimeslots });
-        this.setState({ selectedSlot: null });
+        this.setState({ 
+            timeslots: updatedTimeslots,
+            selectedSlot: null
+        });
+        this.updateRawData(updatedTimeslots);
     }
     
     // Handle saving a timeslot (new or edited)
     handleSaveSlot() {
-        const { timeslots, date, setProps } = this.props;
+        const { timeslots } = this.state;
         const { selectedSlot, newSlot, isAddingSlot } = this.state;
         
         let updatedTimeslots;
@@ -159,7 +253,12 @@ export default class DashGantt extends Component {
                 professionalId: newSlot.professionalId,
                 start: newSlot.start,
                 end: newSlot.end,
-                date: date
+                date: this.props.date,
+                bookingProbability: 0.5,
+                isBooked: false,
+                appointmentType: 'In-person appointment',
+                resource: 'Default',
+                rawData: null
             };
             
             updatedTimeslots = [...timeslots, slotToAdd];
@@ -170,8 +269,8 @@ export default class DashGantt extends Component {
             );
         }
         
-        setProps({ timeslots: updatedTimeslots });
         this.setState({
+            timeslots: updatedTimeslots,
             selectedSlot: null,
             isAddingSlot: false,
             newSlot: {
@@ -180,6 +279,8 @@ export default class DashGantt extends Component {
                 end: null
             }
         });
+        
+        this.updateRawData(updatedTimeslots);
     }
     
     // Handle canceling edit or add operation
@@ -265,54 +366,60 @@ export default class DashGantt extends Component {
     
     // Render a single slot rectangle
     renderSlotRectangle(slot) {
-        const { slotDuration } = this.props;
+        if (!slot) return null;
         
-        // Get the number of cells this slot should span (using cached value if available)
-        const numCellsToSpan = this.getSlotWidth(slot, slotDuration);
+        const { slotDuration } = this.props || {};
+        if (!slotDuration) return null;
         
-        // We need to make the rectangle fill exactly the grid cells it should span
-        // Calculate width to exactly fill the grid cells
-        const slotStyle = {
-            position: 'absolute',
-            top: '4px',
-            left: '0',
-            height: 'calc(100% - 8px)',
-            // For a consistent calculation that accounts for grid lines:
-            // - Multiply by 100% to get the percentage width
-            // - Add (numCells-1) pixels to account for the internal borders
-            width: `calc(${numCellsToSpan * 100}% + ${numCellsToSpan - 1}px)`,
-            // Set box-sizing to border-box to include borders in element's dimensions
-            boxSizing: 'border-box',
-            backgroundColor: this.getProbabilityColor(slot),
-            color: 'white',
-            borderRadius: '3px', // Slightly less rounded for cleaner look
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            cursor: slot.isBooked ? 'not-allowed' : 'pointer',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.1)', // Lighter shadow for simple_white theme
-            zIndex: 100,
-            transition: 'all 0.15s ease-in-out',
-            opacity: slot.isBooked ? 0.8 : 1
-        };
-        
-        return (
-            <div 
-                key={`slot-${slot.id}`} 
-                style={slotStyle}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    if (!slot.isBooked) {
-                        this.handleSlotClick(slot);
-                    }
-                }}
-                title={`Time slot: ${slot.start} - ${slot.end}
-Type: ${slot.appointmentType}
-Resource: ${slot.resource}
-${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.bookingProbability * 100)}%`}`}
-            >
-            </div>
-        );
+        try {
+            // Get the number of cells this slot should span (using cached value if available)
+            const numCellsToSpan = this.getSlotWidth(slot, slotDuration);
+            
+            // We need to make the rectangle fill exactly the grid cells it should span
+            // Calculate width to exactly fill the grid cells
+            const slotStyle = {
+                position: 'absolute',
+                top: '4px',
+                left: '0',
+                height: 'calc(100% - 8px)',
+                // For a consistent calculation that accounts for grid lines:
+                // - Multiply by 100% to get the percentage width
+                // - Add (numCells-1) pixels to account for the internal borders
+                width: `calc(${numCellsToSpan * 100}% + ${numCellsToSpan - 1}px)`,
+                // Set box-sizing to border-box to include borders in element's dimensions
+                boxSizing: 'border-box',
+                backgroundColor: this.getProbabilityColor(slot),
+                color: 'white',
+                borderRadius: '3px', // Slightly less rounded for cleaner look
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: slot.isBooked ? 'not-allowed' : 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)', // Lighter shadow for simple_white theme
+                zIndex: 100,
+                transition: 'all 0.15s ease-in-out',
+                opacity: slot.isBooked ? 0.8 : 1
+            };
+            
+            return (
+                <div 
+                    key={`slot-${slot.id}`} 
+                    style={slotStyle}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (!slot.isBooked) {
+                            this.handleSlotClick(slot);
+                        }
+                    }}
+                    title={`Time slot: ${slot.start} - ${slot.end}
+${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bookingProbability || 0.5) * 100)}%`}`}
+                >
+                </div>
+            );
+        } catch (error) {
+            console.error("Error rendering slot rectangle:", error);
+            return null;
+        }
     }
     
     // Format time for display (HH:MM)
@@ -322,7 +429,8 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.boo
     
     // Generate time cells for each hour and minute interval
     generateTimeCells(professional, styles) {
-        const { timeslots, startHour, endHour, slotDuration } = this.props;
+        const { startHour, endHour, slotDuration } = this.props;
+        const { timeslots } = this.state; // Use state timeslots instead of props
         const slotsPerHour = 60 / slotDuration;
         const cells = [];
         
@@ -420,6 +528,10 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.boo
     
     // Get cached slot width or calculate it if not in cache
     getSlotWidth(slot, slotDuration) {
+        if (!slot || !slot.start || !slot.end || !slotDuration) {
+            return 1; // Default to 1 if any required values are missing
+        }
+        
         // Create a unique key for this slot and duration
         const cacheKey = `${slot.id}_${slot.start}_${slot.end}_${slotDuration}`;
         
@@ -460,8 +572,95 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.boo
         }
     }
     
+    // Update raw data when timeslots change
+    updateRawData(timeslots) {
+        const { rawData, onDataChange, setProps } = this.props;
+        
+        // Create a copy of raw data to modify
+        const updatedRawData = [...(rawData || [])];
+        
+        // Update each timeslot in the raw data
+        timeslots.forEach(timeslot => {
+            const originalData = timeslot.rawData;
+            
+            // For existing slots
+            if (originalData) {
+                // Find the corresponding row in raw data
+                const rowIndex = updatedRawData.findIndex(row => 
+                    row.datetime === `${timeslot.date} ${timeslot.start}` &&
+                    row.laakari === this.state.professionals.find(p => p.id === timeslot.professionalId)?.name
+                );
+
+                if (rowIndex !== -1) {
+                    // Calculate duration from start and end time
+                    const [startHours, startMinutes] = timeslot.start.split(':').map(Number);
+                    const [endHours, endMinutes] = timeslot.end.split(':').map(Number);
+                    
+                    // Handle crossing midnight if needed
+                    let durationMinutes;
+                    if (endHours < startHours || (endHours === startHours && endMinutes < startMinutes)) {
+                        // End time is on the next day
+                        durationMinutes = ((endHours + 24) * 60 + endMinutes) - (startHours * 60 + startMinutes);
+                    } else {
+                        durationMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
+                    }
+                    
+                    // Update the row with new data
+                    updatedRawData[rowIndex] = {
+                        ...updatedRawData[rowIndex],
+                        datetime: `${timeslot.date} ${timeslot.start}`,
+                        kesto_min: durationMinutes, // Update the duration
+                        tyhja: timeslot.isBooked ? 0 : 1
+                    };
+                }
+            } 
+            // For new slots
+            else if (!originalData && timeslot.start && timeslot.end) {
+                // Convert professional ID back to doctor name
+                const doctorName = this.state.professionals.find(p => p.id === timeslot.professionalId)?.name;
+                if (!doctorName) return;
+                
+                // Calculate duration from start and end time
+                const [startHours, startMinutes] = timeslot.start.split(':').map(Number);
+                const [endHours, endMinutes] = timeslot.end.split(':').map(Number);
+                
+                // Handle crossing midnight if needed
+                let durationMinutes;
+                if (endHours < startHours || (endHours === startHours && endMinutes < startMinutes)) {
+                    // End time is on the next day
+                    durationMinutes = ((endHours + 24) * 60 + endMinutes) - (startHours * 60 + startMinutes);
+                } else {
+                    durationMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
+                }
+                
+                // Create a new row for this slot
+                const newRow = {
+                    datetime: `${timeslot.date} ${timeslot.start}`,
+                    laakari: doctorName,
+                    kesto_min: durationMinutes,
+                    tyhja: timeslot.isBooked ? 0 : 1,
+                    bookingProbability: timeslot.bookingProbability || 0.5
+                };
+                
+                // Add the new row to the raw data
+                updatedRawData.push(newRow);
+            }
+        });
+
+        // Call the callback if provided
+        if (onDataChange) {
+            onDataChange(updatedRawData);
+        }
+
+        // Update Dash props if setProps is available
+        if (setProps) {
+            setProps({ rawData: updatedRawData });
+        }
+    }
+    
     render() {
-        const { id, professionals, date, timeslots, startHour, endHour, slotDuration } = this.props;
+        const { id, date, startHour, endHour, slotDuration, backgroundColor } = this.props;
+        const { professionals, timeslots } = this.state;
         
         // Calculate number of time slots per hour (e.g., 12 for 5-minute slots)
         const slotsPerHour = 60 / slotDuration;
@@ -496,7 +695,7 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.boo
                 minWidth: `${150 + (endHour - startHour) * hourWidth}px`
             },
             dashGanttHeaderRow: {
-                backgroundColor: this.props.backgroundColor || '#ffffff' // White background like simple_white theme
+                backgroundColor: backgroundColor || '#ffffff' // White background like simple_white theme
             },
             dashGanttHeaderCell: {
                 padding: '12px 8px', 
@@ -520,7 +719,7 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.boo
                 padding: '8px',
                 borderRight: '1px solid #eaeaea',
                 borderBottom: '1px solid #eaeaea',
-                backgroundColor: this.props.backgroundColor || '#ffffff', // Use same background color as headers
+                backgroundColor: backgroundColor || '#ffffff', // Use same background color as headers
                 verticalAlign: 'middle',
                 fontWeight: '500',
                 fontSize: '14px',
@@ -763,77 +962,30 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round(slot.boo
 }
 
 DashGantt.defaultProps = {
-    timeslots: [],
-    date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
-    startHour: 6, // 6:00 AM
-    endHour: 24, // Midnight
-    slotDuration: 20, // 20 minutes as per business requirements
-    backgroundColor: '#f5f5f5' // Default background color
+    rawData: [],
+    date: new Date().toISOString().split('T')[0],
+    startHour: 6,
+    endHour: 24,
+    slotDuration: 20,
+    backgroundColor: '#f5f5f5',
+    onDataChange: null
 };
 
 DashGantt.propTypes = {
-    /**
-     * The ID used to identify this component in Dash callbacks.
-     */
     id: PropTypes.string,
-
-    /**
-     * List of professionals to display in the Gantt chart.
-     * Each professional should have an id and name.
-     */
-    professionals: PropTypes.arrayOf(
+    rawData: PropTypes.arrayOf(
         PropTypes.shape({
-            id: PropTypes.number.isRequired,
-            name: PropTypes.string.isRequired
-        })
-    ).isRequired,
-
-    /**
-     * List of timeslots to display in the Gantt chart.
-     * Each timeslot should have an id, professionalId, start time, end time, and date.
-     */
-    timeslots: PropTypes.arrayOf(
-        PropTypes.shape({
-            id: PropTypes.number.isRequired,
-            professionalId: PropTypes.number.isRequired,
-            start: PropTypes.string.isRequired, // Format: "HH:MM"
-            end: PropTypes.string.isRequired, // Format: "HH:MM"
-            date: PropTypes.string.isRequired, // Format: "YYYY-MM-DD"
-            bookingProbability: PropTypes.number, // Optional: probability of booking (0-1)
-            isBooked: PropTypes.bool,
-            appointmentType: PropTypes.string,
-            resource: PropTypes.string
+            datetime: PropTypes.string.isRequired,
+            laakari: PropTypes.string.isRequired,
+            kesto_min: PropTypes.number.isRequired,
+            tyhja: PropTypes.number.isRequired
         })
     ),
-
-    /**
-     * The date to display in the Gantt chart (YYYY-MM-DD).
-     */
     date: PropTypes.string,
-
-    /**
-     * The start hour of the day (e.g., 6 for 6:00 AM).
-     */
     startHour: PropTypes.number,
-
-    /**
-     * The end hour of the day (e.g., 24 for midnight).
-     */
     endHour: PropTypes.number,
-
-    /**
-     * The duration of each slot in minutes.
-     */
     slotDuration: PropTypes.number,
-
-    /**
-     * The background color for the header row.
-     */
     backgroundColor: PropTypes.string,
-
-    /**
-     * Dash-assigned callback that should be called to report property changes
-     * to Dash, to make them available for callbacks.
-     */
+    onDataChange: PropTypes.func,
     setProps: PropTypes.func
 };
