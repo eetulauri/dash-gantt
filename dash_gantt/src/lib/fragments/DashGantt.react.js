@@ -576,50 +576,43 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
     updateRawData(timeslots) {
         const { rawData, onDataChange, setProps } = this.props;
         
-        // Create a copy of raw data to modify
-        const updatedRawData = [...(rawData || [])];
+        // Create a fresh array for the updated raw data
+        // Instead of just creating a copy and modifying it
+        let updatedRawData = [];
         
-        // Update each timeslot in the raw data
+        // First, filter existing data if needed
+        if (rawData && rawData.length > 0) {
+            // Keep track of which timeslots are still valid
+            const validTimeslots = new Set();
+            
+            // Generate lookup keys for all currently valid timeslots
+            timeslots.forEach(slot => {
+                const doctorName = this.state.professionals.find(p => p.id === slot.professionalId)?.name;
+                if (doctorName) {
+                    const key = `${slot.date} ${slot.start}_${doctorName}`;
+                    validTimeslots.add(key);
+                }
+            });
+            
+            // Only keep raw data items that correspond to slots we still have
+            updatedRawData = rawData.filter(item => {
+                // Skip items that don't have the required fields
+                if (!item.datetime || !item.laakari) return false;
+                
+                // Create a key to match against our valid timeslots
+                const key = `${item.datetime}_${item.laakari}`;
+                return validTimeslots.has(key);
+            });
+        }
+        
+        // Now process all current timeslots to update or add them
         timeslots.forEach(timeslot => {
             const originalData = timeslot.rawData;
+            const doctorName = this.state.professionals.find(p => p.id === timeslot.professionalId)?.name;
+            if (!doctorName) return;
             
             // For existing slots
             if (originalData) {
-                // Find the corresponding row in raw data
-                const rowIndex = updatedRawData.findIndex(row => 
-                    row.datetime === `${timeslot.date} ${timeslot.start}` &&
-                    row.laakari === this.state.professionals.find(p => p.id === timeslot.professionalId)?.name
-                );
-
-                if (rowIndex !== -1) {
-                    // Calculate duration from start and end time
-                    const [startHours, startMinutes] = timeslot.start.split(':').map(Number);
-                    const [endHours, endMinutes] = timeslot.end.split(':').map(Number);
-                    
-                    // Handle crossing midnight if needed
-                    let durationMinutes;
-                    if (endHours < startHours || (endHours === startHours && endMinutes < startMinutes)) {
-                        // End time is on the next day
-                        durationMinutes = ((endHours + 24) * 60 + endMinutes) - (startHours * 60 + startMinutes);
-                    } else {
-                        durationMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
-                    }
-                    
-                    // Update the row with new data
-                    updatedRawData[rowIndex] = {
-                        ...updatedRawData[rowIndex],
-                        datetime: `${timeslot.date} ${timeslot.start}`,
-                        kesto_min: durationMinutes, // Update the duration
-                        tyhja: timeslot.isBooked ? 0 : 1
-                    };
-                }
-            } 
-            // For new slots
-            else if (!originalData && timeslot.start && timeslot.end) {
-                // Convert professional ID back to doctor name
-                const doctorName = this.state.professionals.find(p => p.id === timeslot.professionalId)?.name;
-                if (!doctorName) return;
-                
                 // Calculate duration from start and end time
                 const [startHours, startMinutes] = timeslot.start.split(':').map(Number);
                 const [endHours, endMinutes] = timeslot.end.split(':').map(Number);
@@ -633,20 +626,63 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
                     durationMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
                 }
                 
-                // Create a new row for this slot
-                const newRow = {
+                // Find the corresponding row in the filtered raw data
+                const rowIndex = updatedRawData.findIndex(row => 
+                    row.datetime === `${timeslot.date} ${timeslot.start}` &&
+                    row.laakari === doctorName
+                );
+                
+                if (rowIndex !== -1) {
+                    // Update the existing row
+                    updatedRawData[rowIndex] = {
+                        ...updatedRawData[rowIndex],
+                        datetime: `${timeslot.date} ${timeslot.start}`,
+                        kesto_min: durationMinutes,
+                        tyhja: timeslot.isBooked ? 0 : 1,
+                        bookingProbability: timeslot.bookingProbability || 0.5
+                    };
+                } else {
+                    // The row was removed during filtering, add it back
+                    updatedRawData.push({
+                        datetime: `${timeslot.date} ${timeslot.start}`,
+                        laakari: doctorName,
+                        kesto_min: durationMinutes,
+                        tyhja: timeslot.isBooked ? 0 : 1,
+                        bookingProbability: timeslot.bookingProbability || 0.5
+                    });
+                }
+            } 
+            // For new slots
+            else if (!originalData && timeslot.start && timeslot.end) {
+                // Calculate duration
+                const [startHours, startMinutes] = timeslot.start.split(':').map(Number);
+                const [endHours, endMinutes] = timeslot.end.split(':').map(Number);
+                
+                let durationMinutes;
+                if (endHours < startHours || (endHours === startHours && endMinutes < startMinutes)) {
+                    durationMinutes = ((endHours + 24) * 60 + endMinutes) - (startHours * 60 + startMinutes);
+                } else {
+                    durationMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
+                }
+                
+                // Create and add a new row
+                updatedRawData.push({
                     datetime: `${timeslot.date} ${timeslot.start}`,
                     laakari: doctorName,
                     kesto_min: durationMinutes,
                     tyhja: timeslot.isBooked ? 0 : 1,
-                    bookingProbability: timeslot.bookingProbability || 0.5
-                };
-                
-                // Add the new row to the raw data
-                updatedRawData.push(newRow);
+                    bookingProbability: timeslot.bookingProbability || 0.5,
+                    toimipiste: "Default",
+                    aikaryhman: "Default",
+                    aikaryhma: "Default",
+                    RESURSSI: "Default",
+                    specialty: "Default",
+                    ETNS_A: 1,
+                    ETNS_B: 1
+                });
             }
         });
-
+        
         // Call the callback if provided
         if (onDataChange) {
             onDataChange(updatedRawData);

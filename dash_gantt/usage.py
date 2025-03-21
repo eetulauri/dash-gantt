@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import random
 
 # Load and prepare data
 df = pd.read_csv('chatgpt-01.csv')
@@ -35,6 +36,9 @@ app.layout = html.Div([
         )
     ], style={'marginBottom': '20px', 'display': 'flex', 'alignItems': 'center'}),
     
+    # Add a store component to hold the current state of the data
+    dcc.Store(id='data-store', data={}),
+    
     dash_gantt.DashGantt(
         id='gantt-chart',
         rawData=[],  # Will be populated by callback
@@ -62,71 +66,107 @@ app.layout = html.Div([
     ], style={'marginTop': '30px'})
 ], style={'fontFamily': 'Arial, sans-serif', 'margin': '20px', 'maxWidth': '1200px', 'marginLeft': 'auto', 'marginRight': 'auto'})
 
+# Define a function to add random probabilities to data
+def add_random_probabilities(data_list):
+    """Add random booking probabilities to each item in the data list"""
+    for item in data_list:
+        item['bookingProbability'] = round(random.random(), 2)  # Random value between 0 and 1
+    return data_list
+
 @callback(
     [Output('gantt-chart', 'rawData'),
      Output('raw-data', 'children'),
-     Output('num-rows', 'children')],
-    [Input('date-picker', 'date')]
+     Output('num-rows', 'children'),
+     Output('data-store', 'data')],
+    [Input('date-picker', 'date')],
+    [State('data-store', 'data')]
 )
-def update_gantt_data(selected_date):
+def update_gantt_data(selected_date, data_store):
     if not selected_date:
-        return [], "No date selected.", "0"
+        return [], "No date selected.", "0", {}
     
-    # Filter data for the selected date
-    df['date'] = df['datetime'].dt.date.astype(str)
-    df_filtered = df[df['date'] == selected_date]
-    
-    # Convert filtered data to list of dictionaries and handle datetime serialization
-    raw_data = []
-    for _, row in df_filtered.iterrows():
-        try:
-            data_dict = {
-                'datetime': row['datetime'].strftime('%Y-%m-%d %H:%M'),
-                'toimipiste': str(row['toimipiste']),
-                'aikaryhman': str(row['aikaryhman']),
-                'aikaryhma': str(row['aikaryhma']),
-                'laakari': str(row['laakari']),
-                'RESURSSI': str(row['RESURSSI']),
-                'specialty': str(row['ETNS']),  # Changed from ETNS to specialty
-                'ETNS_A': int(row['ETNS_A']),
-                'kesto_min': int(row['kesto_min']),
-                'ETNS_B': int(row['ETNS_B']),
-                'tyhja': int(row['tyhja'])
-            }
-            raw_data.append(data_dict)
-        except Exception as e:
-            print(f"Error processing row: {row}")
-            print(f"Error details: {str(e)}")
-            continue
+    # Check if we already have processed data for this date
+    if selected_date in data_store:
+        raw_data = data_store[selected_date]
+    else:
+        # Filter data for the selected date
+        df['date'] = df['datetime'].dt.date.astype(str)
+        df_filtered = df[df['date'] == selected_date]
+        
+        # Convert filtered data to list of dictionaries and handle datetime serialization
+        raw_data = []
+        for _, row in df_filtered.iterrows():
+            try:
+                data_dict = {
+                    'datetime': row['datetime'].strftime('%Y-%m-%d %H:%M'),
+                    'toimipiste': str(row['toimipiste']),
+                    'aikaryhman': str(row['aikaryhman']),
+                    'aikaryhma': str(row['aikaryhma']),
+                    'laakari': str(row['laakari']),
+                    'RESURSSI': str(row['RESURSSI']),
+                    'specialty': str(row['ETNS']),  # Changed from ETNS to specialty
+                    'ETNS_A': int(row['ETNS_A']),
+                    'kesto_min': int(row['kesto_min']),
+                    'ETNS_B': int(row['ETNS_B']),
+                    'tyhja': int(row['tyhja'])
+                }
+                raw_data.append(data_dict)
+            except Exception as e:
+                print(f"Error processing row: {row}")
+                print(f"Error details: {str(e)}")
+                continue
+        
+        # Add random booking probabilities to the data
+        raw_data = add_random_probabilities(raw_data)
+        
+        # Save processed data for this date
+        data_store[selected_date] = raw_data
     
     # Format raw data for display
     raw_data_display = json.dumps(raw_data, indent=2)
     
-    return raw_data, raw_data_display, str(len(raw_data))
+    return raw_data, raw_data_display, str(len(raw_data)), data_store
 
-# Add a new callback to handle updates from the Gantt chart component
 @callback(
-    [Output('raw-data', 'children', allow_duplicate=True),
-     Output('num-rows', 'children', allow_duplicate=True)],
-    [Input('gantt-chart', 'rawData')],
+    Output('gantt-chart', 'rawData', allow_duplicate=True),
+    Input('gantt-chart', 'rawData'),
     prevent_initial_call=True
 )
-def process_gantt_updates(updated_raw_data):
-    if not updated_raw_data:
-        return "No data available.", "0"
+def update_with_probabilities(gantt_data):
+    """Apply random probabilities to the data whenever it changes"""
+    if not gantt_data:
+        return gantt_data
+        
+    # Add random probabilities to simulate prediction model
+    updated_data = add_random_probabilities(gantt_data)
+    
+    print(f"Applied random probabilities to {len(updated_data)} timeslots")
+    
+    return updated_data
+
+@callback(
+    [Output('raw-data', 'children', allow_duplicate=True),
+     Output('num-rows', 'children', allow_duplicate=True),
+     Output('data-store', 'data', allow_duplicate=True)],
+    [Input('gantt-chart', 'rawData')],
+    [State('date-picker', 'date'),
+     State('data-store', 'data')],
+    prevent_initial_call=True
+)
+def handle_gantt_updates(updated_raw_data, current_date, data_store):
+    if not updated_raw_data or not current_date:
+        return "No data available.", "0", data_store
     
     # Print for debugging
-    print(f"Received update from Gantt chart - {len(updated_raw_data)} timeslots")
+    print(f"Handling update from Gantt chart - {len(updated_raw_data)} timeslots")
     
-    # Here you could process the data for your prediction model
-    # For example:
-    # updated_df = pd.DataFrame(updated_raw_data)
-    # predictions = my_prediction_model.predict(updated_df)
+    # Update the data store with the new data for the current date
+    data_store[current_date] = updated_raw_data
     
     # Format raw data for display
     raw_data_display = json.dumps(updated_raw_data, indent=2)
     
-    return raw_data_display, str(len(updated_raw_data))
+    return raw_data_display, str(len(updated_raw_data)), data_store
 
 @callback(
     Output('gantt-chart', 'date'),
