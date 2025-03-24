@@ -338,30 +338,29 @@ export default class DashGantt extends Component {
             return '#1a237e'; // Dark blue for booked slots
         }
         
-        // For unbooked slots, use probability-based colors
+        // For unbooked slots, use probability-based colors from the provided palette
         const probability = slot.bookingProbability;
-        if (probability === undefined) return '#4CAF50'; // Default green
+        if (probability === undefined) return 'rgb(0, 147, 146)'; // Default to first color in palette
         
         // Clamp probability between 0 and 1 for safety
         const p = Math.max(0, Math.min(1, probability));
         
-        let r, g, b;
+        // Define the color palette (from green to red)
+        const colorPalette = [
+            "rgb(0, 147, 146)",    // First green
+            "rgb(57, 177, 133)",
+            "rgb(156, 203, 134)",
+            "rgb(233, 226, 156)",  // Yellow-ish
+            "rgb(238, 180, 121)",
+            "rgb(232, 132, 113)",
+            "rgb(207, 89, 126)"    // Last red
+        ];
         
-        // For the first half (0 to 0.5), transition from red to yellow
-        // For the second half (0.5 to 1), transition from yellow to green
-        if (p < 0.5) {
-            // Red to Yellow: Red stays at 255, Green increases
-            r = 255;
-            g = Math.round(255 * (p * 2)); // *2 to reach 255 at p=0.5
-            b = 0;
-        } else {
-            // Yellow to Green: Green stays at 255, Red decreases
-            r = Math.round(255 * (1 - (p - 0.5) * 2)); // -0.5 and *2 to start from 255 and reach 0 at p=1
-            g = 255;
-            b = 0;
-        }
+        // Calculate which color to use based on probability
+        // p=0 means highest index (most red), p=1 means lowest index (most green)
+        const index = Math.floor((1 - p) * (colorPalette.length - 1));
         
-        return `rgb(${r}, ${g}, ${b})`;
+        return colorPalette[index];
     }
     
     // Render a single slot rectangle

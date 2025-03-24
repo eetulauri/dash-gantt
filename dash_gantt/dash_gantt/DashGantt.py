@@ -25,13 +25,13 @@ Keyword arguments:
     The end hour of the day (e.g., 24 for midnight).
 
 - rawData (list of dicts; optional):
-    Raw data from CSV/database in the format: [   {     datetime:
-    string, // Format: \"YYYY-MM-DD HH:MM\"     laakari: string, //
-    Doctor name     kesto_min: number, // Duration in minutes
+    Raw data from CSV/database in the format:  [    {      datetime:
+    string, // Format: \"YYYY-MM-DD HH:MM\"      laakari: string, //
+    Doctor name      kesto_min: number, // Duration in minutes
     tyhja: number, // 0 if booked, 1 if available
     bookingProbability?: number, // Optional, defaults to 0.5 if not
-    provided     // Additional fields are allowed and will be
-    preserved   } ].
+    provided      // Additional fields are allowed and will be
+    preserved    }  ].
 
     `rawData` is a list of dicts with keys:
 
