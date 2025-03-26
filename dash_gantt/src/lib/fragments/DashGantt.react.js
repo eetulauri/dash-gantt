@@ -333,9 +333,9 @@ export default class DashGantt extends Component {
     
     // Get color based on booking probability and booking status
     getProbabilityColor(slot) {
-        // If the slot is booked, use a dark blue color
+        // If the slot is booked, use a gray color
         if (slot.isBooked) {
-            return '#1a237e'; // Dark blue for booked slots
+            return '#808080'; // Gray color for booked slots
         }
         
         // For unbooked slots, use probability-based colors from the provided palette
@@ -378,9 +378,9 @@ export default class DashGantt extends Component {
             // Calculate width to exactly fill the grid cells
             const slotStyle = {
                 position: 'absolute',
-                top: '4px',
+                top: '2px',
                 left: '0',
-                height: 'calc(100% - 8px)',
+                height: 'calc(100% - 4px)',
                 // For a consistent calculation that accounts for grid lines:
                 // - Multiply by 100% to get the percentage width
                 // - Add (numCells-1) pixels to account for the internal borders
@@ -389,7 +389,7 @@ export default class DashGantt extends Component {
                 boxSizing: 'border-box',
                 backgroundColor: this.getProbabilityColor(slot),
                 color: 'white',
-                borderRadius: '3px', // Slightly less rounded for cleaner look
+                borderRadius: '0', // Remove rounded corners
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -408,6 +408,13 @@ export default class DashGantt extends Component {
                         e.stopPropagation();
                         if (!slot.isBooked) {
                             this.handleSlotClick(slot);
+                        }
+                    }}
+                    onContextMenu={(e) => {
+                        e.preventDefault();  // Prevent the default context menu
+                        e.stopPropagation();
+                        if (!slot.isBooked) {
+                            this.handleRemoveSlot(slot.id);
                         }
                     }}
                     title={`Time slot: ${slot.start} - ${slot.end}
