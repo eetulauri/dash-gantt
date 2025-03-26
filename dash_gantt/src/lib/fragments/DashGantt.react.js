@@ -383,74 +383,56 @@ export default class DashGantt extends Component {
         if (!slotDuration) return null;
         
         try {
-            // Get the number of cells this slot should span (using cached value if available)
+            // Get the number of cells this slot should span
             const numCellsToSpan = this.getSlotWidth(slot, slotDuration);
             
-            // We need to make the rectangle fill exactly the grid cells it should span
-            // Calculate width to exactly fill the grid cells
             const slotStyle = {
                 position: 'absolute',
                 top: '2px',
                 left: '0',
                 height: 'calc(100% - 4px)',
-                // For a consistent calculation that accounts for grid lines:
-                // - Multiply by 100% to get the percentage width
-                // - Add (numCells-1) pixels to account for the internal borders
                 width: `calc(${numCellsToSpan * 100}% + ${numCellsToSpan - 1}px)`,
-                // Set box-sizing to border-box to include borders in element's dimensions
                 boxSizing: 'border-box',
                 backgroundColor: this.getProbabilityColor(slot),
                 color: 'white',
-                borderRadius: '0', // Remove rounded corners
+                borderRadius: '0',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
                 cursor: slot.isBooked ? 'not-allowed' : (this.state.isDragging ? 'grabbing' : 'grab'),
-                boxShadow: '0 1px 2px rgba(0,0,0,0.1)', // Lighter shadow for simple_white theme
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
                 zIndex: 100,
                 transition: 'all 0.15s ease-in-out',
                 opacity: slot.isBooked ? 0.8 : 1
             };
             
+            // Make handles thinner - 1px instead of 4px
             const handleStyle = {
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
-                width: '4px', // Thinner handles
+                width: '1px', // 1px thin handles
                 cursor: 'ew-resize',
-                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                backgroundColor: 'rgba(255, 255, 255, 0.5)', // Slightly more visible
                 transition: 'background-color 0.2s ease'
             };
 
             const leftHandleStyle = {
                 ...handleStyle,
-                left: -2, // Position handle on the edge
-                borderRadius: '2px 0 0 2px'
+                left: 0, // Position at the edge
+                borderRadius: '0'
             };
 
             const rightHandleStyle = {
                 ...handleStyle,
-                right: -2, // Position handle on the edge
-                borderRadius: '0 2px 2px 0'
+                right: 0, // Position at the edge
+                borderRadius: '0'
             };
-
-            // Add active state styling for the dragged slot
-            const isBeingDragged = this.state.isDragging && 
-                                  this.state.draggedSlot && 
-                                  this.state.draggedSlot.id === slot.id;
-            
-            if (isBeingDragged) {
-                // Make the original slot semi-transparent during drag
-                slotStyle.opacity = 0.0;
-            }
 
             return (
                 <div 
                     key={`slot-${slot.id}`} 
-                    style={{
-                        ...slotStyle,
-                        cursor: slot.isBooked ? 'not-allowed' : (this.state.isDragging ? 'grabbing' : 'grab')
-                    }}
+                    style={slotStyle}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (!slot.isBooked) {
@@ -458,7 +440,6 @@ export default class DashGantt extends Component {
                         }
                     }}
                     onMouseDown={(e) => {
-                        // Only handle middle section drag
                         if (!slot.isBooked && e.target === e.currentTarget) {
                             this.handleDragStart(e, slot, 'move');
                         }
@@ -482,20 +463,20 @@ Drag middle to move`}
                                 style={leftHandleStyle}
                                 onMouseDown={(e) => this.handleDragStart(e, slot, 'start')}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
                                 }}
                             />
                             <div
                                 style={rightHandleStyle}
                                 onMouseDown={(e) => this.handleDragStart(e, slot, 'end')}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
                                 }}
                             />
                         </>
@@ -573,46 +554,16 @@ Drag middle to move`}
                 // Prepare cell content
                 let cellContent;
                 
-                if (isDragging && slotBeingDragged && slot && slot.id === slotBeingDragged) {
-                    // If this is the original cell that's being dragged, fade it out
+                if (isDragging && isInPreviewRange) {
+                    // Only show the preview - no opaque original slot
+                    const borderStyle = 'solid';
+                    
                     cellContent = (
                         <>
-                            <div style={{
-                                position: 'absolute',
-                                top: '2px',
-                                left: '0',
-                                height: 'calc(100% - 4px)',
-                                width: `calc(${this.getSlotWidth(slot, slotDuration) * 100}% + ${this.getSlotWidth(slot, slotDuration) - 1}px)`,
-                                backgroundColor: this.getProbabilityColor(slot),
-                                opacity: 0.3,
-                                zIndex: 99
-                            }} />
-                            
-                            {isHovered && (
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: '2px',
-                                    right: '2px',
-                                    fontSize: '10px',
-                                    color: '#666',
-                                    pointerEvents: 'none',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                                    padding: '1px 3px',
-                                    borderRadius: '2px',
-                                    zIndex: 200,
-                                    border: '1px solid #eaeaea'
-                                }}>
-                                    {timeDisplay}
-                                </div>
-                            )}
-                        </>
-                    );
-                } else if (isDragging && isInPreviewRange) {
-                    // If this cell is in the preview range, show the preview overlay
-                    cellContent = (
-                        <>
+                            {/* Only show non-dragged slots */}
                             {slot && slot.id !== slotBeingDragged && this.renderSlotRectangle(slot)}
                             
+                            {/* Preview overlay */}
                             <div style={{
                                 position: 'absolute',
                                 top: '2px',
@@ -620,7 +571,7 @@ Drag middle to move`}
                                 right: '0',
                                 bottom: '2px',
                                 backgroundColor: 'rgba(33, 150, 243, 0.4)',
-                                border: dragType === 'move' ? '2px solid #1976D2' : '2px dashed #1976D2',
+                                border: `1px ${borderStyle} #1976D2`,
                                 pointerEvents: 'none',
                                 zIndex: 95
                             }} />
@@ -648,7 +599,8 @@ Drag middle to move`}
                     // Normal case - just show the slot if there is one
                     cellContent = (
                         <>
-                            {slot && this.renderSlotRectangle(slot)}
+                            {/* Hide original slot only if it's being dragged */}
+                            {(!isDragging || slot?.id !== slotBeingDragged) && slot && this.renderSlotRectangle(slot)}
                             
                             {isHovered && (
                                 <div style={{
