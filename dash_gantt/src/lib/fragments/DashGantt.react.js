@@ -11,6 +11,9 @@ export default class DashGantt extends Component {
     constructor(props) {
         super(props);
         
+        // Add table ref
+        this.tableRef = React.createRef();
+        
         // Initialize state with props
         const { rawData, date } = props;
         const { professionals, timeslots } = DashGantt.transformData(rawData || [], date || new Date().toISOString().split('T')[0]);
@@ -30,7 +33,13 @@ export default class DashGantt extends Component {
             professionals: professionals || [],
             timeslots: timeslots || [],
             rawData: rawData || [],
-            date: date || new Date().toISOString().split('T')[0]
+            date: date || new Date().toISOString().split('T')[0],
+            isDragging: false,
+            dragSide: null, // 'start' or 'end'
+            draggedSlot: null,
+            originalSlot: null,
+            dragPreview: null, // Will show preview of where slot will end up
+            dragType: null, // 'move', 'start', or 'end'
         };
         
         // Bind methods
@@ -49,6 +58,9 @@ export default class DashGantt extends Component {
         this.calculateSlotWidth = this.calculateSlotWidth.bind(this);
         this.getSlotWidth = this.getSlotWidth.bind(this);
         this.updateRawData = this.updateRawData.bind(this);
+        this.handleDragStart = this.handleDragStart.bind(this);
+        this.handleDrag = this.handleDrag.bind(this);
+        this.handleDragEnd = this.handleDragEnd.bind(this);
     }
     
     // Transform raw data into component format
@@ -393,33 +405,101 @@ export default class DashGantt extends Component {
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                cursor: slot.isBooked ? 'not-allowed' : 'pointer',
+                cursor: slot.isBooked ? 'not-allowed' : (this.state.isDragging ? 'grabbing' : 'grab'),
                 boxShadow: '0 1px 2px rgba(0,0,0,0.1)', // Lighter shadow for simple_white theme
                 zIndex: 100,
                 transition: 'all 0.15s ease-in-out',
                 opacity: slot.isBooked ? 0.8 : 1
             };
             
+            const handleStyle = {
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                width: '4px', // Thinner handles
+                cursor: 'ew-resize',
+                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                transition: 'background-color 0.2s ease'
+            };
+
+            const leftHandleStyle = {
+                ...handleStyle,
+                left: -2, // Position handle on the edge
+                borderRadius: '2px 0 0 2px'
+            };
+
+            const rightHandleStyle = {
+                ...handleStyle,
+                right: -2, // Position handle on the edge
+                borderRadius: '0 2px 2px 0'
+            };
+
+            // Add active state styling for the dragged slot
+            const isBeingDragged = this.state.isDragging && 
+                                  this.state.draggedSlot && 
+                                  this.state.draggedSlot.id === slot.id;
+            
+            if (isBeingDragged) {
+                // Make the original slot semi-transparent during drag
+                slotStyle.opacity = 0.0;
+            }
+
             return (
                 <div 
                     key={`slot-${slot.id}`} 
-                    style={slotStyle}
+                    style={{
+                        ...slotStyle,
+                        cursor: slot.isBooked ? 'not-allowed' : (this.state.isDragging ? 'grabbing' : 'grab')
+                    }}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (!slot.isBooked) {
                             this.handleSlotClick(slot);
                         }
                     }}
+                    onMouseDown={(e) => {
+                        // Only handle middle section drag
+                        if (!slot.isBooked && e.target === e.currentTarget) {
+                            this.handleDragStart(e, slot, 'move');
+                        }
+                    }}
                     onContextMenu={(e) => {
-                        e.preventDefault();  // Prevent the default context menu
+                        e.preventDefault();
                         e.stopPropagation();
                         if (!slot.isBooked) {
                             this.handleRemoveSlot(slot.id);
                         }
                     }}
                     title={`Time slot: ${slot.start} - ${slot.end}
-${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bookingProbability || 0.5) * 100)}%`}`}
+${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bookingProbability || 0.5) * 100)}%`}
+Right-click to remove
+Drag edges to resize
+Drag middle to move`}
                 >
+                    {!slot.isBooked && (
+                        <>
+                            <div
+                                style={leftHandleStyle}
+                                onMouseDown={(e) => this.handleDragStart(e, slot, 'start')}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+                                }}
+                            />
+                            <div
+                                style={rightHandleStyle}
+                                onMouseDown={(e) => this.handleDragStart(e, slot, 'end')}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+                                }}
+                            />
+                        </>
+                    )}
                 </div>
             );
         } catch (error) {
@@ -436,14 +516,14 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
     // Generate time cells for each hour and minute interval
     generateTimeCells(professional, styles) {
         const { startHour, endHour, slotDuration } = this.props;
-        const { timeslots } = this.state; // Use state timeslots instead of props
+        const { timeslots, dragPreview, isDragging, dragType } = this.state;
         const slotsPerHour = 60 / slotDuration;
         const cells = [];
         
-        // Only filter slots for this professional once
+        // Filter slots for this professional
         const professionalSlots = timeslots.filter(slot => slot.professionalId === professional.id);
         
-        // Group slots by their start time for more efficient lookup
+        // Group slots by their start time
         const slotsByStartTime = {};
         professionalSlots.forEach(slot => {
             const [hour, minute] = slot.start.split(':').map(Number);
@@ -451,21 +531,14 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
             slotsByStartTime[key] = slot;
         });
         
-        // Pre-create styles for hover state to reduce object creation during render
-        const hoverStyle = {
-            position: 'absolute',
-            bottom: '2px',
-            right: '2px',
-            fontSize: '10px',
-            color: '#666',
-            pointerEvents: 'none',
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-            padding: '1px 3px',
-            borderRadius: '2px',
-            zIndex: 200
-        };
+        // Check if we are dragging a slot for this professional
+        const isPreviewingForThisProfessional = 
+            dragPreview && dragPreview.professionalId === professional.id;
         
-        // Iterate through each time slot for this professional
+        // Determine which slots should be hidden during drag preview (only the one being dragged)
+        const slotBeingDragged = isDragging && isPreviewingForThisProfessional ? dragPreview.id : null;
+        
+        // For each time cell in the grid
         for (let hour = startHour; hour <= endHour; hour++) {
             for (let minuteIndex = 0; minuteIndex < slotsPerHour; minuteIndex++) {
                 const minute = minuteIndex * slotDuration;
@@ -476,56 +549,141 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
                 const slot = slotsByStartTime[timeKey];
                 
                 const isHovered = this.state.hoveredCell && 
-                                this.state.hoveredCell.professionalId === professional.id && 
-                                this.state.hoveredCell.hour === hour &&
-                                this.state.hoveredCell.minute === minute;
+                               this.state.hoveredCell.professionalId === professional.id && 
+                               this.state.hoveredCell.hour === hour &&
+                               this.state.hoveredCell.minute === minute;
                 
                 // Format time for display in the hover tooltip
                 const timeDisplay = this.formatTime(hour, minute);
                 
-                // Create a consistent cell style with proper borders
-                // Hour borders are thicker for better visual separation
+                // Create cell style
                 const cellStyle = {
                     ...styles.dashGanttTimeCell,
                     backgroundColor: isHovered ? '#fafafa' : 'transparent',
-                    borderLeft: minute === 0 ? '1px solid #eaeaea' : 'none',  // Only show left border at hour boundaries
+                    borderLeft: minute === 0 ? '1px solid #eaeaea' : 'none',
                     position: 'relative'
                 };
                 
-                // Create the cell for this time slot
-                const cell = (
+                // Check if this cell should show the preview
+                const cellTimeDecimal = hour + (minute / 60);
+                const isInPreviewRange = isPreviewingForThisProfessional && 
+                                      this.timeToDecimal(dragPreview.start) <= cellTimeDecimal && 
+                                      this.timeToDecimal(dragPreview.end) > cellTimeDecimal;
+                
+                // Prepare cell content
+                let cellContent;
+                
+                if (isDragging && slotBeingDragged && slot && slot.id === slotBeingDragged) {
+                    // If this is the original cell that's being dragged, fade it out
+                    cellContent = (
+                        <>
+                            <div style={{
+                                position: 'absolute',
+                                top: '2px',
+                                left: '0',
+                                height: 'calc(100% - 4px)',
+                                width: `calc(${this.getSlotWidth(slot, slotDuration) * 100}% + ${this.getSlotWidth(slot, slotDuration) - 1}px)`,
+                                backgroundColor: this.getProbabilityColor(slot),
+                                opacity: 0.3,
+                                zIndex: 99
+                            }} />
+                            
+                            {isHovered && (
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: '2px',
+                                    right: '2px',
+                                    fontSize: '10px',
+                                    color: '#666',
+                                    pointerEvents: 'none',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                    padding: '1px 3px',
+                                    borderRadius: '2px',
+                                    zIndex: 200,
+                                    border: '1px solid #eaeaea'
+                                }}>
+                                    {timeDisplay}
+                                </div>
+                            )}
+                        </>
+                    );
+                } else if (isDragging && isInPreviewRange) {
+                    // If this cell is in the preview range, show the preview overlay
+                    cellContent = (
+                        <>
+                            {slot && slot.id !== slotBeingDragged && this.renderSlotRectangle(slot)}
+                            
+                            <div style={{
+                                position: 'absolute',
+                                top: '2px',
+                                left: '0',
+                                right: '0',
+                                bottom: '2px',
+                                backgroundColor: 'rgba(33, 150, 243, 0.4)',
+                                border: dragType === 'move' ? '2px solid #1976D2' : '2px dashed #1976D2',
+                                pointerEvents: 'none',
+                                zIndex: 95
+                            }} />
+                            
+                            {isHovered && (
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: '2px',
+                                    right: '2px',
+                                    fontSize: '10px',
+                                    color: '#666',
+                                    pointerEvents: 'none',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                    padding: '1px 3px',
+                                    borderRadius: '2px',
+                                    zIndex: 200,
+                                    border: '1px solid #eaeaea'
+                                }}>
+                                    {timeDisplay}
+                                </div>
+                            )}
+                        </>
+                    );
+                } else {
+                    // Normal case - just show the slot if there is one
+                    cellContent = (
+                        <>
+                            {slot && this.renderSlotRectangle(slot)}
+                            
+                            {isHovered && (
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: '2px',
+                                    right: '2px',
+                                    fontSize: '10px',
+                                    color: '#666',
+                                    pointerEvents: 'none',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                    padding: '1px 3px',
+                                    borderRadius: '2px',
+                                    zIndex: 200,
+                                    border: '1px solid #eaeaea'
+                                }}>
+                                    {timeDisplay}
+                                </div>
+                            )}
+                        </>
+                    );
+                }
+                
+                // Create and add the cell
+                cells.push(
                     <td 
-                        key={`cell-${professional.id}-${displayTimeKey}`} 
+                        key={`cell-${professional.id}-${displayTimeKey}`}
                         style={cellStyle}
                         onClick={() => this.handleCreateSlot(professional.id, hour, minute)}
                         onMouseEnter={() => this.handleCellHover(professional.id, hour, minute)}
                         onMouseLeave={this.handleCellLeave}
                         title={`Time: ${timeDisplay}`}
                     >
-                        {slot && this.renderSlotRectangle(slot)}
-                        
-                        {/* Show time on hover */}
-                        {isHovered && (
-                            <div style={{
-                                position: 'absolute', 
-                                bottom: '2px', 
-                                right: '2px', 
-                                fontSize: '10px', 
-                                color: '#666', 
-                                pointerEvents: 'none',
-                                backgroundColor: 'rgba(255, 255, 255, 0.8)', 
-                                padding: '1px 3px', 
-                                borderRadius: '2px', 
-                                zIndex: 200,
-                                border: '1px solid #eaeaea'
-                            }}>
-                                {timeDisplay}
-                            </div>
-                        )}
+                        {cellContent}
                     </td>
                 );
-                
-                cells.push(cell);
             }
         }
         
@@ -698,6 +856,165 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
         if (setProps) {
             setProps({ rawData: updatedRawData });
         }
+    }
+    
+    // Add these new methods for handling drag operations
+    handleDragStart(e, slot, type) {
+        e.stopPropagation();
+        if (slot.isBooked) return;
+        
+        // For move operations, capture the initial mouse position and offset
+        const initialMouseX = e.clientX;
+        let initialOffset = 0;
+        
+        if (type === 'move' && this.tableRef.current) {
+            const tableRect = this.tableRef.current.getBoundingClientRect();
+            // Calculate initial offset based on the position within the slot
+            const slotStart = this.timeToDecimal(slot.start) - this.props.startHour;
+            const hoursPerDay = this.props.endHour - this.props.startHour;
+            const pixelsPerHour = tableRect.width / hoursPerDay;
+            
+            // Calculate offset from the start of the slot in pixels
+            initialOffset = initialMouseX - (tableRect.left + slotStart * pixelsPerHour);
+        }
+        
+        this.setState({
+            isDragging: true,
+            dragType: type,
+            draggedSlot: slot,
+            originalSlot: { ...slot },
+            dragPreview: { ...slot }, // Start with original slot as preview for smoother transitions
+            initialMouseX,
+            initialOffset
+        });
+
+        document.addEventListener('mousemove', this.handleDrag);
+        document.addEventListener('mouseup', this.handleDragEnd);
+    }
+
+    handleDrag(e) {
+        if (!this.state.isDragging || !this.tableRef.current) return;
+
+        const { slotDuration } = this.props;
+        const { draggedSlot, dragType, initialOffset } = this.state;
+
+        // Get accurate table dimensions
+        const tableRect = this.tableRef.current.getBoundingClientRect();
+        const hoursPerDay = this.props.endHour - this.props.startHour;
+        const pixelsPerHour = tableRect.width / hoursPerDay;
+        
+        // Calculate relative mouse position with offset adjustment for "move" operations
+        let relativeX;
+        if (dragType === 'move') {
+            relativeX = e.clientX - tableRect.left - initialOffset;
+        } else {
+            relativeX = e.clientX - tableRect.left;
+        }
+        
+        // Constrain the position to the table bounds
+        relativeX = Math.max(0, Math.min(relativeX, tableRect.width));
+        
+        // Convert pixel position to time
+        const hoursFromStart = relativeX / pixelsPerHour;
+        const totalHours = this.props.startHour + hoursFromStart;
+        
+        // Calculate hours and minutes
+        const hour = Math.floor(totalHours);
+        const minute = Math.floor((totalHours - hour) * 60);
+        
+        // Snap to grid
+        const snappedMinute = Math.round(minute / slotDuration) * slotDuration;
+        const newTime = `${Math.min(23, Math.max(0, hour)).toString().padStart(2, '0')}:${snappedMinute.toString().padStart(2, '0')}`;
+        
+        // Create a copy of the slot to update
+        const updatedSlot = { ...draggedSlot };
+        
+        if (dragType === 'move') {
+            // For moving, calculate duration and preserve it
+            const startDecimal = this.timeToDecimal(draggedSlot.start);
+            const endDecimal = this.timeToDecimal(draggedSlot.end);
+            const duration = endDecimal - startDecimal;
+            
+            // Set new start time based on grid-snapped position
+            updatedSlot.start = newTime;
+            
+            // Calculate new end time by adding the duration
+            const newEndDecimal = this.timeToDecimal(newTime) + duration;
+            updatedSlot.end = this.decimalToTime(newEndDecimal);
+        } else if (dragType === 'start') {
+            // For resizing the start, ensure it doesn't go past the end
+            const endDecimal = this.timeToDecimal(draggedSlot.end);
+            const newStartDecimal = this.timeToDecimal(newTime);
+            
+            if (newStartDecimal < endDecimal) {
+                updatedSlot.start = newTime;
+            } else {
+                // If trying to drag start beyond end, cap it
+                updatedSlot.start = this.decimalToTime(endDecimal - (slotDuration / 60));
+            }
+        } else if (dragType === 'end') {
+            // For resizing the end, ensure it doesn't go before the start
+            const startDecimal = this.timeToDecimal(draggedSlot.start);
+            const newEndDecimal = this.timeToDecimal(newTime);
+            
+            if (newEndDecimal > startDecimal) {
+                updatedSlot.end = newTime;
+            } else {
+                // If trying to drag end before start, cap it
+                updatedSlot.end = this.decimalToTime(startDecimal + (slotDuration / 60));
+            }
+        }
+        
+        this.setState({ dragPreview: updatedSlot });
+    }
+
+    handleDragEnd() {
+        const { isDragging, dragPreview, originalSlot } = this.state;
+        if (!isDragging) return;
+
+        document.removeEventListener('mousemove', this.handleDrag);
+        document.removeEventListener('mouseup', this.handleDragEnd);
+
+        if (dragPreview) {
+            const startTime = this.timeToDecimal(dragPreview.start);
+            const endTime = this.timeToDecimal(dragPreview.end);
+
+            if (endTime <= startTime) {
+                // Invalid time range, revert to original
+                this.setState({
+                    isDragging: false,
+                    dragType: null,
+                    draggedSlot: null,
+                    originalSlot: null,
+                    dragPreview: null
+                });
+                return;
+            }
+
+            // Update the slot with preview values
+            const { timeslots } = this.state;
+            const updatedTimeslots = timeslots.map(slot =>
+                slot.id === dragPreview.id ? dragPreview : slot
+            );
+
+            this.setState({
+                timeslots: updatedTimeslots,
+                isDragging: false,
+                dragType: null,
+                draggedSlot: null,
+                originalSlot: null,
+                dragPreview: null
+            });
+
+            this.updateRawData(updatedTimeslots);
+        }
+    }
+    
+    // 1. First, add componentWillUnmount to clean up event listeners
+    componentWillUnmount() {
+        // Clean up event listeners
+        document.removeEventListener('mousemove', this.handleDrag);
+        document.removeEventListener('mouseup', this.handleDragEnd);
     }
     
     render() {
@@ -896,7 +1213,7 @@ ${slot.isBooked ? 'Status: Booked' : `Booking probability: ${Math.round((slot.bo
                     <h2>Schedule for {date}</h2>
                 </div>
                 <div style={styles.dashGanttContainer}>
-                    <table style={styles.dashGanttTable}>
+                    <table ref={this.tableRef} style={styles.dashGanttTable}>
                         <thead>
                             <tr style={styles.dashGanttHeaderRow}>
                                 <th style={styles.dashGanttFirstHeaderCell}></th>
