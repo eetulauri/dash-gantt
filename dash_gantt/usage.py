@@ -44,7 +44,7 @@ app.layout = html.Div([
         rawData=[],  # Will be populated by callback
         date=available_dates[0],
         startHour=6,
-        endHour=24,
+        endHour=23,
         slotDuration=5,  # 5-minute slots
         backgroundColor='#ffffff'
     ),

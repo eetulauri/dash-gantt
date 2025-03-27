@@ -403,7 +403,7 @@ export default class DashGantt extends Component {
                 boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
                 zIndex: 100,
                 transition: 'all 0.15s ease-in-out',
-                opacity: slot.isBooked ? 0.8 : 1
+                opacity: 1
             };
             
             // Make handles thinner - 1px instead of 4px
@@ -583,7 +583,8 @@ Drag middle to move`}
                 // Check if this cell is the start of a time slot
                 const slot = slotsByStartTime[timeKey];
                 
-                const isHovered = this.state.hoveredCell && 
+                // Only show hover effect if not currently dragging
+                const isHovered = !isDragging && this.state.hoveredCell && 
                                this.state.hoveredCell.professionalId === professional.id && 
                                this.state.hoveredCell.hour === hour &&
                                this.state.hoveredCell.minute === minute;
@@ -591,11 +592,13 @@ Drag middle to move`}
                 // Format time for display in the hover tooltip
                 const timeDisplay = this.formatTime(hour, minute);
                 
-                // Create cell style
+                // Determine if this is the first minute of the hour to add the hour marker
+                const isHourStart = minute === 0;
+                
+                // Create cell style with less pronounced hour marker
                 const cellStyle = {
                     ...styles.dashGanttTimeCell,
-                    backgroundColor: isHovered ? '#fafafa' : 'transparent',
-                    borderLeft: minute === 0 ? '1px solid #eaeaea' : 'none',
+                    backgroundColor: isHovered ? 'rgba(33, 150, 243, 0.4)' : 'transparent',
                     position: 'relative'
                 };
                 
@@ -630,23 +633,7 @@ Drag middle to move`}
                                 zIndex: 95
                             }} />
                             
-                            {isHovered && (
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: '2px',
-                                    right: '2px',
-                                    fontSize: '10px',
-                                    color: '#666',
-                                    pointerEvents: 'none',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                                    padding: '1px 3px',
-                                    borderRadius: '2px',
-                                    zIndex: 200,
-                                    border: '1px solid #eaeaea'
-                                }}>
-                                    {timeDisplay}
-                                </div>
-                            )}
+                            {/* Note: We don't show hover tooltip during dragging */}
                         </>
                     );
                 } else {
@@ -656,7 +643,8 @@ Drag middle to move`}
                             {/* Hide original slot only if it's being dragged */}
                             {(!isDragging || slot?.id !== slotBeingDragged) && slot && this.renderSlotRectangle(slot)}
                             
-                            {isHovered && (
+                            {/* Only show hover tooltip if not dragging */}
+                            {isHovered && !isDragging && (
                                 <div style={{
                                     position: 'absolute',
                                     bottom: '2px',
@@ -683,8 +671,18 @@ Drag middle to move`}
                         key={`cell-${professional.id}-${displayTimeKey}`}
                         style={cellStyle}
                         onClick={() => this.handleCreateSlot(professional.id, hour, minute)}
-                        onMouseEnter={() => this.handleCellHover(professional.id, hour, minute)}
-                        onMouseLeave={this.handleCellLeave}
+                        onMouseEnter={() => {
+                            // Only activate hover if not dragging
+                            if (!isDragging) {
+                                this.handleCellHover(professional.id, hour, minute);
+                            }
+                        }}
+                        onMouseLeave={() => {
+                            // Only handle leave if not dragging
+                            if (!isDragging) {
+                                this.handleCellLeave();
+                            }
+                        }}
                         title={`Time: ${timeDisplay}`}
                     >
                         {cellContent}
@@ -1065,15 +1063,16 @@ Drag middle to move`}
             dashGanttHeaderCell: {
                 padding: '12px 8px', 
                 textAlign: 'center',
-                fontWeight: '500', // Medium weight for cleaner look
-                borderRight: '1px solid #eaeaea', // Very light border
+                fontWeight: '500',
+                borderRight: '1px solid #eaeaea',
                 borderBottom: '1px solid #eaeaea',
                 fontSize: '14px',
-                color: '#444' // Darker text for better readability
+                color: '#444',
+                position: 'relative'
             },
             dashGanttFirstHeaderCell: {
                 width: '150px',
-                borderRight: '1px solid #eaeaea',
+                borderRight: '1px solid #eaeaea', // Changed from #aaaaaa to match other cells
                 borderBottom: '1px solid #eaeaea'
             },
             dashGanttRow: {
@@ -1084,7 +1083,7 @@ Drag middle to move`}
                 padding: '8px',
                 borderRight: '1px solid #eaeaea',
                 borderBottom: '1px solid #eaeaea',
-                backgroundColor: backgroundColor || '#ffffff', // Use same background color as headers
+                backgroundColor: backgroundColor || '#ffffff',
                 verticalAlign: 'middle',
                 fontWeight: '500',
                 fontSize: '14px',
@@ -1199,6 +1198,7 @@ Drag middle to move`}
                 // Format as 2-digit hour (e.g., "06" instead of "6")
                 const timeLabel = `${displayHour.toString().padStart(2, '0')}:00`;
                 
+                // Remove the left border that we previously added
                 cells.push(
                     <th 
                         key={`header-${hour}`} 
@@ -1330,8 +1330,8 @@ DashGantt.defaultProps = {
     rawData: [],
     date: new Date().toISOString().split('T')[0],
     startHour: 6,
-    endHour: 24,
-    slotDuration: 20,
+    endHour: 23,
+    slotDuration: 5,
     backgroundColor: '#f5f5f5',
     onDataChange: null
 };
