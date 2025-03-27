@@ -17,6 +17,9 @@ export default class DashGantt extends Component {
         // Add a flag to track if we just finished dragging
         this.justFinishedDragging = false;
         
+        // Add flag for slot creation dragging
+        this.isCreatingSlot = false;
+        
         // Initialize state with props
         const { rawData, date } = props;
         const { professionals, timeslots } = DashGantt.transformData(rawData || [], date || new Date().toISOString().split('T')[0]);
@@ -42,7 +45,10 @@ export default class DashGantt extends Component {
             draggedSlot: null,
             originalSlot: null,
             dragPreview: null, // Will show preview of where slot will end up
-            dragType: null, // 'move', 'start', or 'end'
+            dragType: null, // 'move', 'start', 'end', or 'create'
+            creationStart: null, // Starting point for new slot creation
+            creationEnd: null, // Ending point for new slot creation
+            creationProfessionalId: null, // Professional for whom the slot is being created
         };
         
         // Bind methods
@@ -64,6 +70,9 @@ export default class DashGantt extends Component {
         this.handleDragStart = this.handleDragStart.bind(this);
         this.handleDrag = this.handleDrag.bind(this);
         this.handleDragEnd = this.handleDragEnd.bind(this);
+        this.handleCreationStart = this.handleCreationStart.bind(this);
+        this.handleCreationDrag = this.handleCreationDrag.bind(this);
+        this.handleCreationEnd = this.handleCreationEnd.bind(this);
     }
     
     // Transform raw data into component format
@@ -244,12 +253,19 @@ export default class DashGantt extends Component {
     
     // Handle removing a timeslot
     handleRemoveSlot(slotId) {
+        // Make sure we're not in a drag operation
+        if (this.state.isDragging) {
+            this.resetDragState();
+        }
+        
         const { timeslots } = this.state;
         const updatedTimeslots = timeslots.filter(slot => slot.id !== slotId);
+        
         this.setState({ 
             timeslots: updatedTimeslots,
             selectedSlot: null
         });
+        
         this.updateRawData(updatedTimeslots);
     }
     
@@ -341,9 +357,20 @@ export default class DashGantt extends Component {
     
     // Format decimal hours to time string
     decimalToTime(decimal) {
-        const hours = Math.floor(decimal);
-        const minutes = Math.round((decimal - hours) * 60);
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        // Ensure we're dealing with a positive decimal
+        const positiveDecimal = Math.max(0, decimal);
+        
+        // Handle hours >= 24 by wrapping around
+        const wrappedDecimal = positiveDecimal % 24;
+        
+        const hours = Math.floor(wrappedDecimal);
+        const minutes = Math.round((wrappedDecimal - hours) * 60);
+        
+        // Handle case where minutes rounds to 60
+        const adjustedMinutes = minutes >= 60 ? 0 : minutes;
+        const adjustedHours = (minutes >= 60 ? hours + 1 : hours) % 24;
+        
+        return `${adjustedHours.toString().padStart(2, '0')}:${adjustedMinutes.toString().padStart(2, '0')}`;
     }
     
     // Get color based on booking probability and booking status
@@ -464,15 +491,19 @@ export default class DashGantt extends Component {
                         }
                     }}
                     onMouseDown={(e) => {
-                        if (!slot.isBooked && e.target === e.currentTarget) {
+                        if (!slot.isBooked && e.target === e.currentTarget && e.button === 0) {
                             this.handleDragStart(e, slot, 'move');
                         }
                     }}
                     onContextMenu={(e) => {
+                        // This handles right-click
                         e.preventDefault();
                         e.stopPropagation();
-                        // Only remove if we haven't just finished dragging
-                        if (!slot.isBooked && !this.justFinishedDragging) {
+                        
+                        // Remove the slot if it's not booked
+                        // Note: We're removing the check for this.justFinishedDragging 
+                        // since it's preventing legitimate right-clicks
+                        if (!slot.isBooked) {
                             this.handleRemoveSlot(slot.id);
                         }
                     }}
@@ -507,7 +538,11 @@ Drag middle to move`}
                             {/* Invisible wider handles for easier grabbing */}
                             <div
                                 style={leftInvisibleHandleStyle}
-                                onMouseDown={(e) => this.handleDragStart(e, slot, 'start')}
+                                onMouseDown={(e) => {
+                                    if (e.button === 0) { // Only handle left mouse button
+                                        this.handleDragStart(e, slot, 'start');
+                                    }
+                                }}
                                 onMouseEnter={(e) => {
                                     const visibleHandle = e.currentTarget.previousSibling;
                                     if (visibleHandle) {
@@ -523,7 +558,11 @@ Drag middle to move`}
                             />
                             <div
                                 style={rightInvisibleHandleStyle}
-                                onMouseDown={(e) => this.handleDragStart(e, slot, 'end')}
+                                onMouseDown={(e) => {
+                                    if (e.button === 0) { // Only handle left mouse button
+                                        this.handleDragStart(e, slot, 'end');
+                                    }
+                                }}
                                 onMouseEnter={(e) => {
                                     const visibleHandle = e.currentTarget.previousSibling.previousSibling;
                                     if (visibleHandle) {
@@ -555,7 +594,7 @@ Drag middle to move`}
     // Generate time cells for each hour and minute interval
     generateTimeCells(professional, styles) {
         const { startHour, endHour, slotDuration } = this.props;
-        const { timeslots, dragPreview, isDragging, dragType } = this.state;
+        const { timeslots, dragPreview, isDragging, dragType, creationStart, creationEnd, creationProfessionalId } = this.state;
         const slotsPerHour = 60 / slotDuration;
         const cells = [];
         
@@ -576,6 +615,24 @@ Drag middle to move`}
         
         // Determine which slots should be hidden during drag preview (only the one being dragged)
         const slotBeingDragged = isDragging && isPreviewingForThisProfessional ? dragPreview.id : null;
+        
+        // Check if we're creating a slot for this professional
+        const isCreatingForThisProfessional = 
+            isDragging && dragType === 'create' && creationProfessionalId === professional.id;
+        
+        // Calculate creation preview range if applicable
+        let creationStartDecimal = null;
+        let creationEndDecimal = null;
+        
+        if (isCreatingForThisProfessional && creationStart && creationEnd) {
+            creationStartDecimal = this.timeToDecimal(creationStart);
+            creationEndDecimal = this.timeToDecimal(creationEnd);
+            
+            // Ensure start is before end
+            if (creationEndDecimal < creationStartDecimal) {
+                [creationStartDecimal, creationEndDecimal] = [creationEndDecimal, creationStartDecimal];
+            }
+        }
         
         // For each time cell in the grid
         for (let hour = startHour; hour <= endHour; hour++) {
@@ -608,44 +665,79 @@ Drag middle to move`}
                 
                 // Check if this cell should show the preview
                 const cellTimeDecimal = hour + (minute / 60);
+                
+                // Check if this cell is in the normal drag preview range
                 const isInPreviewRange = isPreviewingForThisProfessional && 
                                       this.timeToDecimal(dragPreview.start) <= cellTimeDecimal && 
                                       this.timeToDecimal(dragPreview.end) > cellTimeDecimal;
                 
+                // Check if this cell is in the creation preview range
+                const isInCreationRange = isCreatingForThisProfessional && 
+                                      creationStartDecimal <= cellTimeDecimal && 
+                                      creationEndDecimal > cellTimeDecimal;
+                
                 // Prepare cell content
                 let cellContent;
                 
-                if (isDragging && isInPreviewRange) {
-                    // Only show the preview - no opaque original slot
-                    const borderStyle = 'solid';
-                    
-                    cellContent = (
-                        <>
-                            {/* Only show non-dragged slots */}
-                            {slot && slot.id !== slotBeingDragged && this.renderSlotRectangle(slot)}
-                            
-                            {/* Preview overlay */}
-                            <div style={{
-                                position: 'absolute',
-                                top: '2px',
-                                left: '0',
-                                right: '0',
-                                bottom: '2px',
-                                backgroundColor: 'rgba(33, 150, 243, 0.4)',
-                                border: `1px ${borderStyle} #1976D2`,
-                                pointerEvents: 'none',
-                                zIndex: 95
-                            }} />
-                            
-                            {/* Note: We don't show hover tooltip during dragging */}
-                        </>
-                    );
+                if (isDragging) {
+                    if (isInPreviewRange) {
+                        // Normal drag preview
+                        const borderStyle = 'solid';
+                        
+                        cellContent = (
+                            <>
+                                {/* Only show non-dragged slots */}
+                                {slot && slot.id !== slotBeingDragged && this.renderSlotRectangle(slot)}
+                                
+                                {/* Preview overlay */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '2px',
+                                    left: '0',
+                                    right: '0',
+                                    bottom: '2px',
+                                    backgroundColor: 'rgba(33, 150, 243, 0.4)',
+                                    border: `1px ${borderStyle} #1976D2`,
+                                    pointerEvents: 'none',
+                                    zIndex: 95
+                                }} />
+                            </>
+                        );
+                    } else if (isInCreationRange) {
+                        // Creation preview
+                        cellContent = (
+                            <>
+                                {/* Continue showing existing slots during creation */}
+                                {slot && this.renderSlotRectangle(slot)}
+                                
+                                {/* Creation preview overlay */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '2px',
+                                    left: '0',
+                                    right: '0',
+                                    bottom: '2px',
+                                    backgroundColor: 'rgba(76, 175, 80, 0.4)', // Green for creation
+                                    border: '1px dashed #388E3C',
+                                    pointerEvents: 'none',
+                                    zIndex: 90
+                                }} />
+                            </>
+                        );
+                    } else {
+                        // Cell not in any preview range
+                        cellContent = (
+                            <>
+                                {/* Hide original slot only if it's being dragged */}
+                                {(!isDragging || slot?.id !== slotBeingDragged) && slot && this.renderSlotRectangle(slot)}
+                            </>
+                        );
+                    }
                 } else {
                     // Normal case - just show the slot if there is one
                     cellContent = (
                         <>
-                            {/* Hide original slot only if it's being dragged */}
-                            {(!isDragging || slot?.id !== slotBeingDragged) && slot && this.renderSlotRectangle(slot)}
+                            {slot && this.renderSlotRectangle(slot)}
                             
                             {/* Only show hover tooltip if not dragging */}
                             {isHovered && !isDragging && (
@@ -674,7 +766,12 @@ Drag middle to move`}
                     <td 
                         key={`cell-${professional.id}-${displayTimeKey}`}
                         style={cellStyle}
-                        onClick={() => this.handleCreateSlot(professional.id, hour, minute)}
+                        onClick={(e) => {
+                            // Only create a slot on direct click if not dragging
+                            if (!this.isCreatingSlot && !this.justFinishedDragging) {
+                                this.handleCreateSlot(professional.id, hour, minute);
+                            }
+                        }}
                         onMouseEnter={() => {
                             // Only activate hover if not dragging
                             if (!isDragging) {
@@ -687,7 +784,14 @@ Drag middle to move`}
                                 this.handleCellLeave();
                             }
                         }}
-                        title={`Time: ${timeDisplay}`}
+                        onMouseDown={(e) => {
+                            // Start creation drag when left-clicking on an empty cell
+                            if (e.button === 0 && !slot) {
+                                e.preventDefault();
+                                this.handleCreationStart(e, professional.id, hour, minute);
+                            }
+                        }}
+                        title={`Time: ${timeDisplay}\nClick to add a 20-minute slot\nClick and drag to create a custom-length slot`}
                     >
                         {cellContent}
                     </td>
@@ -749,7 +853,6 @@ Drag middle to move`}
         const { rawData, onDataChange, setProps } = this.props;
         
         // Create a fresh array for the updated raw data
-        // Instead of just creating a copy and modifying it
         let updatedRawData = [];
         
         // First, filter existing data if needed
@@ -779,6 +882,12 @@ Drag middle to move`}
         
         // Now process all current timeslots to update or add them
         timeslots.forEach(timeslot => {
+            // Skip invalid timeslots
+            if (!this.isValidTime(timeslot.start) || !this.isValidTime(timeslot.end)) {
+                console.warn('Skipping invalid timeslot:', timeslot);
+                return;
+            }
+            
             const originalData = timeslot.rawData;
             const doctorName = this.state.professionals.find(p => p.id === timeslot.professionalId)?.name;
             if (!doctorName) return;
@@ -903,12 +1012,15 @@ Drag middle to move`}
     handleDrag(e) {
         if (!this.state.isDragging || !this.tableRef.current) return;
 
-        const { slotDuration } = this.props;
+        const { slotDuration, startHour, endHour } = this.props;
         const { draggedSlot, dragType, initialOffset } = this.state;
+        
+        // If no draggedSlot is available, bail out early
+        if (!draggedSlot) return;
 
         // Get accurate table dimensions
         const tableRect = this.tableRef.current.getBoundingClientRect();
-        const hoursPerDay = this.props.endHour - this.props.startHour;
+        const hoursPerDay = endHour - startHour;
         const pixelsPerHour = tableRect.width / hoursPerDay;
         
         // Calculate relative mouse position with offset adjustment for "move" operations
@@ -924,15 +1036,21 @@ Drag middle to move`}
         
         // Convert pixel position to time
         const hoursFromStart = relativeX / pixelsPerHour;
-        const totalHours = this.props.startHour + hoursFromStart;
+        const totalHours = startHour + hoursFromStart;
         
-        // Calculate hours and minutes
-        const hour = Math.floor(totalHours);
+        // Calculate hours and minutes, ensuring we have a valid hour (never negative)
+        const hour = Math.max(0, Math.floor(totalHours));
         const minute = Math.floor((totalHours - hour) * 60);
         
         // Snap to grid
         const snappedMinute = Math.round(minute / slotDuration) * slotDuration;
-        const newTime = `${Math.min(23, Math.max(0, hour)).toString().padStart(2, '0')}:${snappedMinute.toString().padStart(2, '0')}`;
+        
+        // Ensure we don't end up with 60 minutes (should roll over to next hour)
+        const adjustedMinute = snappedMinute >= 60 ? 0 : snappedMinute;
+        const adjustedHour = snappedMinute >= 60 ? hour + 1 : hour;
+        
+        // Format the time string with guaranteed positive hours
+        const newTime = `${Math.min(23, Math.max(0, adjustedHour)).toString().padStart(2, '0')}:${adjustedMinute.toString().padStart(2, '0')}`;
         
         // Create a copy of the slot to update
         const updatedSlot = { ...draggedSlot };
@@ -948,6 +1066,7 @@ Drag middle to move`}
             
             // Calculate new end time by adding the duration
             const newEndDecimal = this.timeToDecimal(newTime) + duration;
+            // Using our decimalToTime helper, ensuring we validate the result
             updatedSlot.end = this.decimalToTime(newEndDecimal);
         } else if (dragType === 'start') {
             // For resizing the start, ensure it doesn't go past the end
@@ -973,23 +1092,43 @@ Drag middle to move`}
             }
         }
         
-        this.setState({ dragPreview: updatedSlot });
+        // Verify all time values are valid before updating state
+        if (this.isValidTime(updatedSlot.start) && this.isValidTime(updatedSlot.end)) {
+            this.setState({ dragPreview: updatedSlot });
+        }
+    }
+
+    // 2. Add this helper method to check if a time string is valid
+    isValidTime(timeString) {
+        if (!timeString) return false;
+        
+        // Check format and values
+        const timeRegex = /^([0-9]|0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$/;
+        if (!timeRegex.test(timeString)) return false;
+        
+        // Parse hours and minutes
+        const [hours, minutes] = timeString.split(':').map(Number);
+        
+        // Validate ranges
+        return hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60;
     }
 
     handleDragEnd(e) {
-        const { isDragging, dragPreview, originalSlot } = this.state;
-        if (!isDragging) return;
+        const { isDragging, dragPreview, draggedSlot, originalSlot, dragType } = this.state;
+        if (!isDragging || !draggedSlot) return;
 
         document.removeEventListener('mousemove', this.handleDrag);
         document.removeEventListener('mouseup', this.handleDragEnd);
 
+        // Store a reference to the slot we're working with
+        const slotId = draggedSlot.id;
+
         // Add a flag to prevent right-click removal being triggered immediately after drag
+        // But only keep it briefly (100ms instead of 300ms)
         this.justFinishedDragging = true;
-        
-        // Reset the flag after a short delay
         setTimeout(() => {
             this.justFinishedDragging = false;
-        }, 300); // 300ms should be enough to prevent accidental right clicks
+        }, 100);
 
         if (dragPreview) {
             const startTime = this.timeToDecimal(dragPreview.start);
@@ -1009,21 +1148,182 @@ Drag middle to move`}
 
             // Update the slot with preview values
             const { timeslots } = this.state;
-            const updatedTimeslots = timeslots.map(slot =>
-                slot.id === dragPreview.id ? dragPreview : slot
-            );
+            
+            // Find the slot to update
+            const slotIndex = timeslots.findIndex(slot => slot.id === slotId);
+            
+            if (slotIndex !== -1) {
+                // Create a new array with the updated slot
+                const updatedTimeslots = [...timeslots];
+                updatedTimeslots[slotIndex] = {
+                    ...timeslots[slotIndex],
+                    start: dragPreview.start,
+                    end: dragPreview.end
+                };
 
+                this.setState({
+                    timeslots: updatedTimeslots,
+                    isDragging: false,
+                    dragType: null,
+                    draggedSlot: null,
+                    originalSlot: null,
+                    dragPreview: null
+                });
+
+                this.updateRawData(updatedTimeslots);
+            } else {
+                // If the slot wasn't found (shouldn't happen), just reset drag state
+                console.warn('Could not find slot to update:', slotId);
+                this.setState({
+                    isDragging: false,
+                    dragType: null,
+                    draggedSlot: null,
+                    originalSlot: null,
+                    dragPreview: null
+                });
+            }
+        } else {
+            // No drag preview, just reset state
             this.setState({
-                timeslots: updatedTimeslots,
                 isDragging: false,
                 dragType: null,
                 draggedSlot: null,
                 originalSlot: null,
                 dragPreview: null
             });
-
-            this.updateRawData(updatedTimeslots);
         }
+    }
+    
+    // Add these new methods for slot creation by dragging
+    handleCreationStart(e, professionalId, hour, minute) {
+        // Only proceed if left mouse button was clicked (button 0)
+        if (e.button !== 0) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Format the time for the creation start
+        const startTime = this.formatTime(hour, minute);
+        
+        this.setState({
+            isDragging: true,
+            dragType: 'create',
+            creationProfessionalId: professionalId,
+            creationStart: startTime,
+            creationEnd: startTime // Initially, end is same as start
+        });
+        
+        this.isCreatingSlot = true;
+        
+        // Add event listeners for drag and end
+        document.addEventListener('mousemove', this.handleCreationDrag);
+        document.addEventListener('mouseup', this.handleCreationEnd);
+    }
+
+    handleCreationDrag(e) {
+        if (!this.isCreatingSlot || !this.tableRef.current) return;
+        
+        const { slotDuration, startHour, endHour } = this.props;
+        const { creationStart } = this.state;
+        
+        // Get table dimensions
+        const tableRect = this.tableRef.current.getBoundingClientRect();
+        const hoursPerDay = endHour - startHour;
+        const pixelsPerHour = tableRect.width / hoursPerDay;
+        
+        // Calculate relative mouse position
+        const relativeX = e.clientX - tableRect.left;
+        
+        // Constrain the position to the table bounds
+        const boundedX = Math.max(0, Math.min(relativeX, tableRect.width));
+        
+        // Convert pixel position to time
+        const hoursFromStart = boundedX / pixelsPerHour;
+        const totalHours = startHour + hoursFromStart;
+        
+        // Calculate hours and minutes, ensuring we have a valid hour (never negative)
+        const hour = Math.max(0, Math.floor(totalHours));
+        const minute = Math.floor((totalHours - hour) * 60);
+        
+        // Snap to grid
+        const snappedMinute = Math.round(minute / slotDuration) * slotDuration;
+        
+        // Ensure we don't end up with 60 minutes (should roll over to next hour)
+        const adjustedMinute = snappedMinute >= 60 ? 0 : snappedMinute;
+        const adjustedHour = snappedMinute >= 60 ? hour + 1 : hour;
+        
+        // Format the time string with guaranteed positive hours
+        const newTime = `${Math.min(23, Math.max(0, adjustedHour)).toString().padStart(2, '0')}:${adjustedMinute.toString().padStart(2, '0')}`;
+        
+        // Update the end time
+        this.setState({ creationEnd: newTime });
+    }
+
+    handleCreationEnd(e) {
+        if (!this.isCreatingSlot) return;
+        
+        // Clean up event listeners
+        document.removeEventListener('mousemove', this.handleCreationDrag);
+        document.removeEventListener('mouseup', this.handleCreationEnd);
+        
+        const { creationStart, creationEnd, creationProfessionalId } = this.state;
+        
+        // Sort the times to ensure start is before end
+        let startTime = creationStart;
+        let endTime = creationEnd;
+        
+        // Convert to decimal for comparison
+        const startDecimal = this.timeToDecimal(startTime);
+        const endDecimal = this.timeToDecimal(endTime);
+        
+        // If they're dragging backwards, swap the times
+        if (endDecimal < startDecimal) {
+            [startTime, endTime] = [endTime, startTime];
+        }
+        
+        // Only create a slot if the times are different
+        if (startTime !== endTime) {
+            const { timeslots, date } = this.state;
+            
+            // Create new slot
+            const newId = timeslots.length > 0 ? Math.max(...timeslots.map(slot => slot.id)) + 1 : 1;
+            const slotToAdd = {
+                id: newId,
+                professionalId: creationProfessionalId,
+                start: startTime,
+                end: endTime,
+                date: date,
+                bookingProbability: 0.5,
+                isBooked: false,
+                appointmentType: 'In-person appointment',
+                resource: 'Default',
+                rawData: null // New slot has no original data
+            };
+            
+            // Update timeslots and raw data
+            const updatedTimeslots = [...timeslots, slotToAdd];
+            this.setState({ 
+                timeslots: updatedTimeslots,
+                isDragging: false,
+                dragType: null,
+                creationStart: null,
+                creationEnd: null,
+                creationProfessionalId: null
+            });
+            
+            this.updateRawData(updatedTimeslots);
+        } else {
+            // If start and end are the same, just reset the state
+            this.setState({
+                isDragging: false,
+                dragType: null,
+                creationStart: null,
+                creationEnd: null,
+                creationProfessionalId: null
+            });
+        }
+        
+        this.isCreatingSlot = false;
     }
     
     // 1. First, add componentWillUnmount to clean up event listeners
@@ -1031,6 +1331,33 @@ Drag middle to move`}
         // Clean up event listeners
         document.removeEventListener('mousemove', this.handleDrag);
         document.removeEventListener('mouseup', this.handleDragEnd);
+        document.removeEventListener('mousemove', this.handleCreationDrag);
+        document.removeEventListener('mouseup', this.handleCreationEnd);
+    }
+    
+    // Add this utility method to reset all drag-related state
+    resetDragState() {
+        // Clean up all event listeners
+        document.removeEventListener('mousemove', this.handleDrag);
+        document.removeEventListener('mouseup', this.handleDragEnd);
+        document.removeEventListener('mousemove', this.handleCreationDrag);
+        document.removeEventListener('mouseup', this.handleCreationEnd);
+        
+        // Reset all drag-related state
+        this.setState({
+            isDragging: false,
+            dragType: null,
+            draggedSlot: null,
+            originalSlot: null,
+            dragPreview: null,
+            creationStart: null,
+            creationEnd: null,
+            creationProfessionalId: null
+        });
+        
+        // Reset flags
+        this.isCreatingSlot = false;
+        this.justFinishedDragging = false;
     }
     
     render() {
