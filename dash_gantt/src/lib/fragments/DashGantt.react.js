@@ -411,7 +411,7 @@ export default class DashGantt extends Component {
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
-                width: '1px', // 1px thin handles
+                width: '1px', // 1px thin handles (visual appearance)
                 cursor: 'ew-resize',
                 backgroundColor: 'rgba(255, 255, 255, 0.5)', // Slightly more visible
                 transition: 'background-color 0.2s ease'
@@ -427,6 +427,27 @@ export default class DashGantt extends Component {
                 ...handleStyle,
                 right: 0, // Position at the edge
                 borderRadius: '0'
+            };
+            
+            // Add wider invisible handles for easier grabbing (clickable area)
+            const invisibleHandleStyle = {
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                width: '3px', // 3px wide clickable area
+                cursor: 'ew-resize',
+                backgroundColor: 'transparent', // Invisible
+                zIndex: 101 // Higher z-index to ensure it's above the visible handle
+            };
+            
+            const leftInvisibleHandleStyle = {
+                ...invisibleHandleStyle,
+                left: '-1px' // Extend 1px to the left, keeping 2px inside
+            };
+            
+            const rightInvisibleHandleStyle = {
+                ...invisibleHandleStyle,
+                right: '-1px' // Extend 1px to the right, keeping 2px inside
             };
 
             return (
@@ -459,9 +480,9 @@ Drag middle to move`}
                 >
                     {!slot.isBooked && (
                         <>
+                            {/* Visual handles (thin) */}
                             <div
                                 style={leftHandleStyle}
-                                onMouseDown={(e) => this.handleDragStart(e, slot, 'start')}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
                                 }}
@@ -471,12 +492,45 @@ Drag middle to move`}
                             />
                             <div
                                 style={rightHandleStyle}
-                                onMouseDown={(e) => this.handleDragStart(e, slot, 'end')}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                }}
+                            />
+                            
+                            {/* Invisible wider handles for easier grabbing */}
+                            <div
+                                style={leftInvisibleHandleStyle}
+                                onMouseDown={(e) => this.handleDragStart(e, slot, 'start')}
+                                onMouseEnter={(e) => {
+                                    const visibleHandle = e.currentTarget.previousSibling;
+                                    if (visibleHandle) {
+                                        visibleHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    const visibleHandle = e.currentTarget.previousSibling;
+                                    if (visibleHandle) {
+                                        visibleHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                    }
+                                }}
+                            />
+                            <div
+                                style={rightInvisibleHandleStyle}
+                                onMouseDown={(e) => this.handleDragStart(e, slot, 'end')}
+                                onMouseEnter={(e) => {
+                                    const visibleHandle = e.currentTarget.previousSibling.previousSibling;
+                                    if (visibleHandle) {
+                                        visibleHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    const visibleHandle = e.currentTarget.previousSibling.previousSibling;
+                                    if (visibleHandle) {
+                                        visibleHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                                    }
                                 }}
                             />
                         </>
