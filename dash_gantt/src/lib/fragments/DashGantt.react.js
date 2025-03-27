@@ -14,6 +14,9 @@ export default class DashGantt extends Component {
         // Add table ref
         this.tableRef = React.createRef();
         
+        // Add a flag to track if we just finished dragging
+        this.justFinishedDragging = false;
+        
         // Initialize state with props
         const { rawData, date } = props;
         const { professionals, timeslots } = DashGantt.transformData(rawData || [], date || new Date().toISOString().split('T')[0]);
@@ -468,7 +471,8 @@ export default class DashGantt extends Component {
                     onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!slot.isBooked) {
+                        // Only remove if we haven't just finished dragging
+                        if (!slot.isBooked && !this.justFinishedDragging) {
                             this.handleRemoveSlot(slot.id);
                         }
                     }}
@@ -972,12 +976,20 @@ Drag middle to move`}
         this.setState({ dragPreview: updatedSlot });
     }
 
-    handleDragEnd() {
+    handleDragEnd(e) {
         const { isDragging, dragPreview, originalSlot } = this.state;
         if (!isDragging) return;
 
         document.removeEventListener('mousemove', this.handleDrag);
         document.removeEventListener('mouseup', this.handleDragEnd);
+
+        // Add a flag to prevent right-click removal being triggered immediately after drag
+        this.justFinishedDragging = true;
+        
+        // Reset the flag after a short delay
+        setTimeout(() => {
+            this.justFinishedDragging = false;
+        }, 300); // 300ms should be enough to prevent accidental right clicks
 
         if (dragPreview) {
             const startTime = this.timeToDecimal(dragPreview.start);
